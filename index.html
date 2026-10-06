@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>MyLoja</title>
+    <meta name="description" content="MyLoja: controle simples de vendas e caixa para a sua loja." />
+    <meta name="theme-color" content="#9f3a5c" />
+    <meta name="application-name" content="MyLoja" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MyLoja" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <style>
+      /* Splash mínima enquanto o app carrega (evita tela branca) */
+      #boot {
+        position: fixed; inset: 0; display: grid; place-items: center;
+        background: #faf7f2; color: #9f3a5c;
+        font: 700 28px/1 ui-rounded, system-ui, sans-serif; letter-spacing: -0.02em;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div id="boot">MyLoja</div></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
