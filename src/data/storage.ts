@@ -19,7 +19,7 @@ export class StorageError extends Error {
 }
 
 export function defaultSettings(): Settings {
-  return { ownerName: '', lastMethod: 'PIX', closings: {} }
+  return { ownerName: '', lastMethod: 'PIX', closings: {}, profitMarginBp: {} }
 }
 
 export function emptyData(): AppData {
@@ -45,7 +45,7 @@ export function normalizeData(raw: unknown): AppData {
     (t) =>
       t &&
       typeof t.id === 'string' &&
-      (t.type === 'SALE' || t.type === 'PAYMENT' || t.type === 'PURCHASE') &&
+      (t.type === 'SALE' || t.type === 'PAYMENT' || t.type === 'PURCHASE' || t.type === 'EXPENSE') &&
       Number.isInteger(t.amountCents) &&
       t.amountCents > 0 &&
       typeof t.createdAt === 'string' &&

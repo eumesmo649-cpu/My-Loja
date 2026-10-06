@@ -12,6 +12,7 @@ export const TYPE_LABEL: Record<TransactionType, string> = {
   SALE: 'Venda',
   PAYMENT: 'Prestação',
   PURCHASE: 'Compra',
+  EXPENSE: 'Despesa',
 }
 
 /** Formas disponíveis ao registrar uma venda. */

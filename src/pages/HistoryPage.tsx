@@ -74,7 +74,7 @@ export function HistoryPage() {
   }, [visible])
 
   const totalLabel =
-    type === 'SALE' ? formatBRL(summary.salesCents) : type === 'PAYMENT' ? formatBRL(summary.paymentsCents) : type === 'PURCHASE' ? formatBRL(summary.purchasesCents) : null
+    type === 'SALE' ? formatBRL(summary.salesCents) : type === 'PAYMENT' ? formatBRL(summary.paymentsCents) : type === 'PURCHASE' ? formatBRL(summary.purchasesCents) : type === 'EXPENSE' ? formatBRL(summary.expensesCents) : null
 
   const resetFilters = () => {
     setType('ALL')
@@ -84,7 +84,7 @@ export function HistoryPage() {
 
   return (
     <div>
-      <PageHeader title="Histórico" subtitle="Todas as vendas, prestações e compras" />
+      <PageHeader title="Histórico" subtitle="Vendas, prestações, compras e despesas" />
 
       <div className="flex flex-col gap-3">
         <Segmented
@@ -99,6 +99,7 @@ export function HistoryPage() {
             { value: 'SALE', label: 'Vendas' },
             { value: 'PAYMENT', label: 'Prestações' },
             { value: 'PURCHASE', label: 'Compras' },
+            { value: 'EXPENSE', label: 'Despesas' },
           ]}
         />
         <Segmented

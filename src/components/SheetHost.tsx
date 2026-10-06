@@ -1,10 +1,11 @@
-import { HandCoins, Package, ShoppingBag, type LucideIcon } from 'lucide-react'
+import { HandCoins, Package, Receipt, ShoppingBag, type LucideIcon } from 'lucide-react'
 import { useStore } from '@/store/StoreContext'
 import { useUI } from '@/store/UIContext'
 import { Sheet } from './ui/Sheet'
 import { SaleForm } from './forms/SaleForm'
 import { PaymentForm } from './forms/PaymentForm'
 import { PurchaseForm } from './forms/PurchaseForm'
+import { ExpenseForm } from './forms/ExpenseForm'
 import { CustomerForm } from './forms/CustomerForm'
 import { TransactionDetail } from './TransactionDetail'
 import { cn } from '@/lib/cn'
@@ -70,9 +71,16 @@ function AddMenu() {
       <MenuOption
         icon={Package}
         title="Compra"
-        description="Saída de dinheiro: mercadoria e despesas"
+        description="Mercadoria para revender"
         tone="bg-danger-50 text-danger-600"
         onClick={() => openSheet({ kind: 'purchase' })}
+      />
+      <MenuOption
+        icon={Receipt}
+        title="Despesa"
+        description="Aluguel, energia, internet e outras contas"
+        tone="bg-clay-50 text-clay-600"
+        onClick={() => openSheet({ kind: 'expense' })}
       />
     </div>
   )
@@ -81,7 +89,7 @@ function AddMenu() {
 /** Renderiza a janela (bottom sheet no celular / modal no desktop) conforme o estado global. */
 export function SheetHost() {
   const { sheet, closeSheet } = useUI()
-  const { transactions } = useStore()
+  const { transactions, customers } = useStore()
 
   if (!sheet) return null
 
@@ -110,6 +118,24 @@ export function SheetHost() {
           <PurchaseForm />
         </Sheet>
       )
+    case 'expense':
+      return (
+        <Sheet key="expense" title="Nova despesa" onClose={closeSheet}>
+          <ExpenseForm />
+        </Sheet>
+      )
+    case 'customerEdit': {
+      const customer = customers.find((c) => c.id === sheet.id)
+      if (!customer) {
+        queueMicrotask(closeSheet)
+        return null
+      }
+      return (
+        <Sheet key={`customer-edit-${customer.id}`} title="Editar cliente" onClose={closeSheet}>
+          <CustomerForm editing={customer} />
+        </Sheet>
+      )
+    }
     case 'customer':
       return (
         <Sheet key="customer" title="Novo cliente" onClose={closeSheet}>
@@ -131,12 +157,13 @@ export function SheetHost() {
           </Sheet>
         )
       }
-      const titles = { SALE: 'Editar venda', PAYMENT: 'Editar prestação', PURCHASE: 'Editar compra' } as const
+      const titles = { SALE: 'Editar venda', PAYMENT: 'Editar prestação', PURCHASE: 'Editar compra', EXPENSE: 'Editar despesa' } as const
       return (
         <Sheet key={`edit-${tx.id}`} title={titles[tx.type]} onClose={closeSheet}>
           {tx.type === 'SALE' && <SaleForm editing={tx} />}
           {tx.type === 'PAYMENT' && <PaymentForm editing={tx} />}
           {tx.type === 'PURCHASE' && <PurchaseForm editing={tx} />}
+          {tx.type === 'EXPENSE' && <ExpenseForm editing={tx} />}
         </Sheet>
       )
     }

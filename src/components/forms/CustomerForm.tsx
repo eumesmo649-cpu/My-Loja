@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { Customer } from '@/types'
 import { useStore } from '@/store/StoreContext'
 import { useUI } from '@/store/UIContext'
 import { DomainError } from '@/data/repository'
@@ -7,19 +8,25 @@ import { navigate, paths } from '@/hooks/useRoute'
 import { Button } from '../ui/Button'
 import { TextField } from '../ui/TextField'
 
-/** Cadastro mínimo: só o nome é obrigatório. */
-export function CustomerForm() {
-  const { customers, createCustomer } = useStore()
+/** Cadastro mínimo: só o nome é obrigatório. Com `editing`, altera nome e telefone de um cliente existente. */
+export function CustomerForm({ editing }: { editing?: Customer }) {
+  const { customers, createCustomer, editCustomer } = useStore()
   const { closeSheet, toast } = useUI()
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [name, setName] = useState(editing?.name ?? '')
+  const [phone, setPhone] = useState(editing?.phone ?? '')
   const [error, setError] = useState<string>()
 
   const submit = () => {
-    const err = validateCustomerName(name, customers)
+    const err = validateCustomerName(name, editing ? customers.filter((c) => c.id !== editing.id) : customers)
     setError(err)
     if (err) return
     try {
+      if (editing) {
+        const c = editCustomer(editing.id, { name, phone })
+        toast({ title: 'Cliente atualizado', description: c.name })
+        closeSheet()
+        return
+      }
       const c = createCustomer({ name, phone })
       toast({ title: 'Cliente cadastrado', description: c.name })
       closeSheet()
@@ -63,7 +70,7 @@ export function CustomerForm() {
         maxLength={20}
       />
       <Button type="submit" size="lg" full>
-        Cadastrar cliente
+        {editing ? 'Salvar alterações' : 'Cadastrar cliente'}
       </Button>
     </form>
   )

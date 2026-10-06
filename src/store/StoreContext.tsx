@@ -57,6 +57,11 @@ interface StoreValue {
   removeTransaction: (id: string) => void
   restoreTransaction: (id: string) => void
   createCustomer: (input: { name: string; phone?: string }) => Customer
+  editCustomer: (id: string, input: { name: string; phone?: string }) => Customer
+  removeCustomer: (id: string) => void
+  restoreCustomer: (id: string) => void
+  /** Define (ou, com null, remove) o percentual de lucro estimado de um mês ('2026-10'), em centésimos de % */
+  setProfitMargin: (monthKey: string, bp: number | null) => void
   setOwnerName: (name: string) => void
   closeDay: (day: string, record: Omit<ClosingRecord, 'closedAt'>) => void
   reopenDay: (day: string) => void
@@ -170,6 +175,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit(() => next)
       return customer
     },
+    [commit],
+  )
+
+  const editCustomer = useCallback(
+    (id: string, input: { name: string; phone?: string }) => {
+      const { data: next, customer } = repo.updateCustomer(dataRef.current, id, input)
+      commit(() => next)
+      return customer
+    },
+    [commit],
+  )
+
+  const removeCustomer = useCallback((id: string) => {
+    const next = repo.deleteCustomer(dataRef.current, id)
+    commit(() => next)
+  }, [commit])
+
+  const restoreCustomer = useCallback((id: string) => {
+    const next = repo.restoreCustomer(dataRef.current, id)
+    commit(() => next)
+  }, [commit])
+
+  const setProfitMargin = useCallback(
+    (monthKey: string, bp: number | null) =>
+      commit((d) => {
+        const margins = { ...d.settings.profitMarginBp }
+        if (bp === null) delete margins[monthKey]
+        else margins[monthKey] = bp
+        return repo.updateSettings(d, { profitMarginBp: margins })
+      }),
     [commit],
   )
 
@@ -382,6 +417,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeTransaction,
       restoreTransaction,
       createCustomer,
+      editCustomer,
+      removeCustomer,
+      restoreCustomer,
+      setProfitMargin,
       setOwnerName,
       closeDay,
       reopenDay,
@@ -401,7 +440,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       status, loadError, saveError, transactions, customers, data.settings, balances, receivableCents,
       pendingCount, hasDemo, addTransaction, editTransaction, removeTransaction, restoreTransaction,
-      createCustomer, setOwnerName, closeDay, reopenDay, loadDemo, clearDemo, backupJson, importBackup,
+      createCustomer, editCustomer, removeCustomer, restoreCustomer, setProfitMargin, setOwnerName, closeDay, reopenDay, loadDemo, clearDemo, backupJson, importBackup,
       eraseEverything, startFresh, load, sync, runSync, signIn, signUp, signOut,
     ],
   )

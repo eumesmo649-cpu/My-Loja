@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
-import { ChevronLeft, HandCoins, Phone, ShoppingBag } from 'lucide-react'
+import { ChevronLeft, HandCoins, Pencil, Phone, ShoppingBag, Trash2 } from 'lucide-react'
 import { useStore } from '@/store/StoreContext'
 import { useUI } from '@/store/UIContext'
 import { customerLedger } from '@/domain/balances'
 import { formatDayShort } from '@/lib/dates'
 import { formatBRL } from '@/lib/money'
-import { paths } from '@/hooks/useRoute'
+import { DomainError } from '@/data/repository'
+import { navigate, paths } from '@/hooks/useRoute'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/Button'
 import { Card, SectionTitle } from '@/components/ui/Card'
@@ -13,8 +14,8 @@ import { EmptyState, ErrorState } from '@/components/ui/EmptyState'
 import { CustomerAvatar } from '@/components/CustomerAvatar'
 
 export function CustomerDetailPage({ id }: { id: string }) {
-  const { customers, transactions, balances } = useStore()
-  const { openSheet } = useUI()
+  const { customers, transactions, balances, removeCustomer, restoreCustomer } = useStore()
+  const { openSheet, confirm, toast } = useUI()
 
   const customer = customers.find((c) => c.id === id)
   const ledger = useMemo(() => customerLedger(id, transactions).reverse(), [id, transactions])
@@ -34,6 +35,50 @@ export function CustomerDetailPage({ id }: { id: string }) {
   }
 
   const balance = balances.get(id) ?? 0
+
+  const onDelete = async () => {
+    if (balance > 0) {
+      toast({
+        kind: 'error',
+        title: 'Este cliente ainda deve',
+        description: `${customer.name} deve ${formatBRL(balance)}. Receba o valor antes de excluir.`,
+        durationMs: 6000,
+      })
+      return
+    }
+    const ok = await confirm({
+      title: `Excluir ${customer.name}?`,
+      message:
+        'As vendas e prestações antigas continuam no histórico e nos relatórios, mas o cliente sai da lista e não poderá mais ser escolhido.',
+      confirmLabel: 'Excluir cliente',
+      cancelLabel: 'Manter',
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      removeCustomer(id)
+    } catch (e) {
+      toast({ kind: 'error', title: 'Não foi possível excluir', description: e instanceof DomainError ? e.message : 'Tente novamente.' })
+      return
+    }
+    navigate(paths.customers)
+    toast({
+      kind: 'info',
+      title: 'Cliente excluído',
+      description: customer.name,
+      action: {
+        label: 'Desfazer',
+        onClick: () => {
+          try {
+            restoreCustomer(id)
+            toast({ title: 'Cliente restaurado', description: customer.name })
+          } catch (e) {
+            toast({ kind: 'error', title: 'Não foi possível restaurar', description: e instanceof DomainError ? e.message : undefined })
+          }
+        },
+      },
+    })
+  }
 
   return (
     <div>
@@ -55,6 +100,24 @@ export function CustomerDetailPage({ id }: { id: string }) {
               {customer.phone}
             </a>
           )}
+        </div>
+        <div className="ml-auto flex shrink-0 gap-1">
+          <button
+            type="button"
+            aria-label="Editar cliente"
+            onClick={() => openSheet({ kind: 'customerEdit', id })}
+            className="grid h-11 w-11 place-items-center rounded-full text-muted hover:bg-sand hover:text-ink"
+          >
+            <Pencil className="h-5 w-5" aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label="Excluir cliente"
+            onClick={() => void onDelete()}
+            className="grid h-11 w-11 place-items-center rounded-full text-muted hover:bg-danger-50 hover:text-danger-600"
+          >
+            <Trash2 className="h-5 w-5" aria-hidden />
+          </button>
         </div>
       </div>
 

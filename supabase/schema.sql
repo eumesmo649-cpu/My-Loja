@@ -20,7 +20,7 @@ create table if not exists public.customers (
 create table if not exists public.transactions (
   id              uuid primary key,
   user_id         uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  type            text   not null check (type in ('SALE', 'PAYMENT', 'PURCHASE')),
+  type            text   not null check (type in ('SALE', 'PAYMENT', 'PURCHASE', 'EXPENSE')),
   -- valores SEMPRE em centavos (inteiro): R$ 35,90 = 3590
   amount_cents    bigint not null check (amount_cents > 0 and amount_cents <= 1000000000),
   payment_method  text   not null check (payment_method in ('PIX', 'CASH', 'DEBIT', 'CREDIT', 'FICHA')),
@@ -38,7 +38,12 @@ create table if not exists public.transactions (
   constraint ficha_sale_needs_customer
     check (not (type = 'SALE' and payment_method = 'FICHA') or customer_id is not null),
   constraint purchase_not_ficha
-    check (type <> 'PURCHASE' or payment_method <> 'FICHA')
+    check (type <> 'PURCHASE' or payment_method <> 'FICHA'),
+  constraint expense_not_ficha
+    check (type <> 'EXPENSE' or (payment_method <> 'FICHA' and customer_id is null)),
+  -- despesa precisa de descrição (guardada em "note")
+  constraint expense_needs_description
+    check (type <> 'EXPENSE' or char_length(btrim(coalesce(note, ''))) > 0)
 );
 
 create index if not exists customers_user_idx     on public.customers (user_id, synced_at);

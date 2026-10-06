@@ -10,7 +10,10 @@ import {
 } from './balances'
 import { filterByDay, summarize } from './summary'
 import { monthReport, yearReport } from './reports'
-import { validateCustomerName, validatePayment, validateSale } from './validation'
+import { validateCustomerName, validateExpense, validatePayment, validateSale } from './validation'
+import { bpToInput, estimatedProfitCents, formatPercent, lastMarginBefore, parsePercentToBp } from './profit'
+import * as repo from '@/data/repository'
+import { emptyData } from '@/data/storage'
 
 let seq = 0
 function tx(
@@ -251,5 +254,177 @@ describe('relatórios', () => {
 
   it('filtra por dia local', () => {
     expect(filterByDay(list, '2026-10-03')).toHaveLength(1)
+  })
+})
+
+describe('despesas', () => {
+  it('despesa é saída própria: não é venda, não é recebido e reduz o saldo do dia', () => {
+    const s = summarize([
+      tx('SALE', 10000, 'PIX', '2026-10-05T10:00:00'),
+      tx('PURCHASE', 3000, 'PIX', '2026-10-05T11:00:00'),
+      tx('EXPENSE', 2000, 'CASH', '2026-10-05T12:00:00', { note: 'Energia' }),
+    ])
+    expect(s.salesCents).toBe(10000)
+    expect(s.receivedCents).toBe(10000)
+    expect(s.expensesCents).toBe(2000)
+    expect(s.expensesCount).toBe(1)
+    expect(s.purchasesCents).toBe(3000)
+    expect(s.netCents).toBe(5000)
+  })
+
+  it('exige descrição, valor e forma de pagamento à vista', () => {
+    expect(validateExpense({ amountCents: 5000, method: 'PIX', description: '' }).description).toBeTruthy()
+    expect(validateExpense({ amountCents: 5000, method: 'PIX', description: '  ' }).description).toBeTruthy()
+    expect(validateExpense({ amountCents: 0, method: 'PIX', description: 'Aluguel' }).amount).toBeTruthy()
+    expect(validateExpense({ amountCents: 5000, method: 'FICHA', description: 'Aluguel' }).method).toBeTruthy()
+    expect(validateExpense({ amountCents: 5000, method: 'PIX', description: 'Aluguel' })).toEqual({})
+  })
+
+  it('repositório guarda a descrição em note e recusa despesa sem descrição', () => {
+    const data = emptyData()
+    expect(() => repo.addTransaction(data, { type: 'EXPENSE', amountCents: 5000, paymentMethod: 'PIX' })).toThrow()
+    expect(() =>
+      repo.addTransaction(data, { type: 'EXPENSE', amountCents: 5000, paymentMethod: 'FICHA', note: 'Aluguel' }),
+    ).toThrow()
+    const { data: next, transaction } = repo.addTransaction(data, {
+      type: 'EXPENSE',
+      amountCents: 120000,
+      paymentMethod: 'PIX',
+      note: '  Aluguel de outubro ',
+    })
+    expect(transaction.note).toBe('Aluguel de outubro')
+    expect(transaction.customerId).toBeNull()
+    expect(next.pending.transactions).toContain(transaction.id)
+    // editar para apagar a descrição também é recusado
+    expect(() => repo.updateTransaction(next, transaction.id, { note: '   ' })).toThrow()
+  })
+
+  it('aparece nos relatórios mensal e anual', () => {
+    const l = [
+      tx('SALE', 100000, 'PIX', '2026-10-02T10:00:00'),
+      tx('EXPENSE', 20000, 'PIX', '2026-10-03T10:00:00', { note: 'Aluguel' }),
+    ]
+    expect(monthReport(l, 2026, 9, new Date(2026, 10, 15)).expensesCents).toBe(20000)
+    expect(yearReport(l, 2026, new Date(2026, 10, 15)).expensesCents).toBe(20000)
+  })
+})
+
+describe('lucro estimado por percentual', () => {
+  it('lê e mostra percentuais sem float', () => {
+    expect(parsePercentToBp('35')).toBe(3500)
+    expect(parsePercentToBp('32,5')).toBe(3250)
+    expect(parsePercentToBp('32,5%')).toBe(3250)
+    expect(parsePercentToBp('')).toBeNull()
+    expect(parsePercentToBp('101')).toBe('invalid')
+    expect(parsePercentToBp('abc')).toBe('invalid')
+    expect(parsePercentToBp('100')).toBe(10000)
+    expect(parsePercentToBp('0')).toBe(0)
+    expect(formatPercent(3500)).toBe('35%')
+    expect(formatPercent(3250)).toBe('32,5%')
+    expect(formatPercent(3205)).toBe('32,05%')
+    expect(bpToInput(3250)).toBe('32,5')
+  })
+
+  it('lucro = vendas × percentual, arredondado ao centavo', () => {
+    expect(estimatedProfitCents(100000, 3500)).toBe(35000)
+    expect(estimatedProfitCents(33333, 3333)).toBe(11110) // 33333 × 0,3333 = 11109,6…
+    expect(estimatedProfitCents(0, 3500)).toBe(0)
+  })
+
+  const l = [
+    tx('SALE', 100000, 'PIX', '2026-08-10T10:00:00'),
+    tx('SALE', 200000, 'PIX', '2026-09-10T10:00:00'),
+    tx('EXPENSE', 30000, 'PIX', '2026-09-11T10:00:00', { note: 'Aluguel' }),
+    tx('SALE', 300000, 'PIX', '2026-10-02T10:00:00'),
+    tx('EXPENSE', 40000, 'PIX', '2026-10-03T10:00:00', { note: 'Aluguel' }),
+    tx('PURCHASE', 90000, 'PIX', '2026-10-04T10:00:00'),
+  ]
+  const now = new Date(2026, 9, 6)
+
+  it('relatório mensal: lucro estimado e lucro após despesas (compras não entram)', () => {
+    const r = monthReport(l, 2026, 9, now, 3000)
+    expect(r.marginBp).toBe(3000)
+    expect(r.estimatedProfitCents).toBe(90000)
+    expect(r.profitAfterExpensesCents).toBe(50000) // 90000 − 40000 de despesas
+    expect(r.purchasesCents).toBe(90000) // aparece, mas não é descontada do lucro
+  })
+
+  it('sem percentual não há lucro calculado', () => {
+    const r = monthReport(l, 2026, 9, now)
+    expect(r.estimatedProfitCents).toBeNull()
+    expect(r.profitAfterExpensesCents).toBeNull()
+  })
+
+  it('anual soma o lucro de cada mês com o PERCENTUAL DO PRÓPRIO MÊS', () => {
+    const r = yearReport(l, 2026, now, { '2026-08': 2000, '2026-09': 3000, '2026-10': 4000 })
+    // 100000×20% + 200000×30% + 300000×40% = 20000 + 60000 + 120000
+    expect(r.profitCents).toBe(200000)
+    // menos despesas: 200000 − 30000 − 40000
+    expect(r.profitAfterExpensesCents).toBe(130000)
+    expect(r.monthsWithMargin).toBe(3)
+    expect(r.monthsMissingMargin).toEqual([])
+    expect(r.months[8].profitCents).toBe(60000)
+    expect(r.months[8].profitAfterExpensesCents).toBe(30000)
+  })
+
+  it('anual: meses com vendas e sem percentual ficam fora da soma e são avisados', () => {
+    const r = yearReport(l, 2026, now, { '2026-09': 3000 })
+    expect(r.profitCents).toBe(60000)
+    expect(r.profitAfterExpensesCents).toBe(30000) // despesas de agosto/outubro não entram
+    expect(r.monthsMissingMargin).toEqual([7, 9])
+    expect(r.months[7].profitCents).toBeNull()
+  })
+
+  it('sugere o último percentual informado antes do mês', () => {
+    expect(lastMarginBefore({ '2026-08': 2000, '2026-09': 3000 }, 2026, 9)).toEqual({ key: '2026-09', bp: 3000 })
+    expect(lastMarginBefore({ '2026-11': 3000 }, 2026, 9)).toBeNull()
+    expect(lastMarginBefore({ '2025-12': 1500 }, 2026, 0)).toEqual({ key: '2025-12', bp: 1500 })
+  })
+})
+
+describe('clientes: renomear e excluir', () => {
+  function withMaria() {
+    const { data, customer } = repo.addCustomer(emptyData(), { name: 'Maria', phone: '8499' })
+    return { data, maria: customer }
+  }
+
+  it('renomeia e atualiza o telefone, marcando para sincronizar', () => {
+    const { data, maria } = withMaria()
+    const { data: next, customer } = repo.updateCustomer(data, maria.id, { name: '  Maria  José ', phone: '' })
+    expect(customer.name).toBe('Maria José')
+    expect(customer.phone).toBeUndefined()
+    expect(next.pending.customers).toContain(maria.id)
+  })
+
+  it('não deixa renomear para um nome que já existe (ignora acento e caixa), mas aceita o próprio nome', () => {
+    const { data, maria } = withMaria()
+    const { data: d2, customer: ana } = repo.addCustomer(data, { name: 'Ana' })
+    expect(() => repo.updateCustomer(d2, ana.id, { name: 'MARÍA' })).toThrow()
+    expect(() => repo.updateCustomer(d2, maria.id, { name: 'Maria' })).not.toThrow()
+    expect(() => repo.updateCustomer(d2, maria.id, { name: ' ' })).toThrow()
+  })
+
+  it('só exclui cliente sem saldo devedor; com ficha em aberto recusa', () => {
+    const { data, maria } = withMaria()
+    const sale = repo.addTransaction(data, { type: 'SALE', amountCents: 30000, paymentMethod: 'FICHA', customerId: maria.id })
+    expect(() => repo.deleteCustomer(sale.data, maria.id)).toThrow(/ainda deve/)
+
+    const paid = repo.addTransaction(sale.data, { type: 'PAYMENT', amountCents: 30000, paymentMethod: 'PIX', customerId: maria.id })
+    const deleted = repo.deleteCustomer(paid.data, maria.id)
+    expect(deleted.customers.find((c) => c.id === maria.id)?.deletedAt).toBeTruthy()
+    // o histórico de vendas continua intacto
+    expect(deleted.transactions).toHaveLength(2)
+    expect(summarize(deleted.transactions).salesCents).toBe(30000)
+    expect(totalReceivable(deleted.transactions)).toBe(0)
+  })
+
+  it('desfazer restaura o cliente; nome ocupado impede restaurar em duplicidade', () => {
+    const { data, maria } = withMaria()
+    const deleted = repo.deleteCustomer(data, maria.id)
+    const restored = repo.restoreCustomer(deleted, maria.id)
+    expect(restored.customers.find((c) => c.id === maria.id)?.deletedAt).toBeNull()
+
+    const { data: taken } = repo.addCustomer(deleted, { name: 'Maria' })
+    expect(() => repo.restoreCustomer(taken, maria.id)).toThrow()
   })
 })

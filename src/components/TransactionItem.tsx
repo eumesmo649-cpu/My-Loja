@@ -1,4 +1,4 @@
-import { HandCoins, Package, ShoppingBag, type LucideIcon } from 'lucide-react'
+import { HandCoins, Package, Receipt, ShoppingBag, type LucideIcon } from 'lucide-react'
 import type { Transaction, TransactionType } from '@/types'
 import { METHOD_LABEL, TYPE_LABEL } from '@/domain/methods'
 import { formatDayShort, formatTime } from '@/lib/dates'
@@ -9,21 +9,28 @@ export const TYPE_ICON: Record<TransactionType, LucideIcon> = {
   SALE: ShoppingBag,
   PAYMENT: HandCoins,
   PURCHASE: Package,
+  EXPENSE: Receipt,
 }
 
 const TYPE_TONE: Record<TransactionType, string> = {
   SALE: 'bg-sage-50 text-sage-600',
   PAYMENT: 'bg-brand-50 text-brand-600',
   PURCHASE: 'bg-danger-50 text-danger-600',
+  EXPENSE: 'bg-clay-50 text-clay-600',
 }
 
 /** "Ficha · Maria", "Maria · PIX", "Atacado · Espécie"... */
 export function transactionSubtitle(tx: Transaction, customerName?: string): string {
   if (tx.type === 'SALE') {
-    return tx.paymentMethod === 'FICHA' ? `Ficha · ${customerName ?? 'cliente'}` : METHOD_LABEL[tx.paymentMethod]
+    return tx.paymentMethod === 'FICHA'
+      ? `Ficha · ${customerName ?? 'cliente removido'}`
+      : METHOD_LABEL[tx.paymentMethod]
   }
   if (tx.type === 'PAYMENT') {
-    return `${customerName ?? 'Cliente'} · ${METHOD_LABEL[tx.paymentMethod]}`
+    return `${customerName ?? 'Cliente removido'} · ${METHOD_LABEL[tx.paymentMethod]}`
+  }
+  if (tx.type === 'EXPENSE') {
+    return `${tx.note ?? 'Sem descrição'} · ${METHOD_LABEL[tx.paymentMethod]}`
   }
   return tx.supplier ? `${tx.supplier} · ${METHOD_LABEL[tx.paymentMethod]}` : METHOD_LABEL[tx.paymentMethod]
 }
@@ -44,7 +51,8 @@ interface TransactionItemProps {
 export function TransactionItem({ tx, customerName, showDate, onClick }: TransactionItemProps) {
   const Icon = TYPE_ICON[tx.type]
   const isFicha = tx.type === 'SALE' && tx.paymentMethod === 'FICHA'
-  const sign = tx.type === 'PURCHASE' ? '−' : isFicha ? '' : '+'
+  const isOut = tx.type === 'PURCHASE' || tx.type === 'EXPENSE'
+  const sign = isOut ? '−' : isFicha ? '' : '+'
   const when = showDate ? `${formatDayShort(tx.createdAt)} · ${formatTime(tx.createdAt)}` : formatTime(tx.createdAt)
 
   return (
@@ -64,7 +72,7 @@ export function TransactionItem({ tx, customerName, showDate, onClick }: Transac
         <span
           className={cn(
             'num block text-[17px] font-bold leading-tight',
-            tx.type === 'PURCHASE' && 'text-danger-600',
+            isOut && 'text-danger-600',
             tx.type === 'PAYMENT' && 'text-sage-600',
             tx.type === 'SALE' && !isFicha && 'text-sage-600',
           )}

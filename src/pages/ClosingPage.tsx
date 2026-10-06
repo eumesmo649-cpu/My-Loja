@@ -80,8 +80,9 @@ export function ClosingPage() {
             <Line label="Vendas à vista" value={s.cashSalesCents} />
             <Line label="Recebimentos de fichas" value={s.paymentsCents} />
             <Line label="Total recebido" value={s.receivedCents} strong tone="plus" />
-            <Line label="Compras" value={s.purchasesCents} tone="minus" />
-            <Line label="Saldo do dia (recebido − compras)" value={s.netCents} strong />
+            <Line label="Compras de mercadoria" value={s.purchasesCents} tone="minus" />
+            <Line label="Despesas" value={s.expensesCents} tone="minus" />
+            <Line label="Saldo do dia" value={s.netCents} strong />
           </div>
         </Card>
       </div>

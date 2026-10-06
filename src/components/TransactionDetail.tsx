@@ -11,6 +11,13 @@ import { cn } from '@/lib/cn'
 import { Button } from './ui/Button'
 import { TYPE_ICON } from './TransactionItem'
 
+const EXCLUDE_LABEL = {
+  SALE: 'esta venda',
+  PAYMENT: 'esta prestação',
+  PURCHASE: 'esta compra',
+  EXPENSE: 'esta despesa',
+} as const
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 border-t border-line py-3.5 first:border-t-0">
@@ -28,6 +35,7 @@ export function TransactionDetail({ tx }: { tx: Transaction }) {
   const Icon = TYPE_ICON[tx.type]
   const isFicha = tx.type === 'SALE' && tx.paymentMethod === 'FICHA'
   const balance = customer ? balances.get(customer.id) ?? 0 : 0
+  const isOut = tx.type === 'PURCHASE' || tx.type === 'EXPENSE'
 
   const onDelete = async () => {
     // descreve o efeito da exclusão em linguagem simples
@@ -43,7 +51,7 @@ export function TransactionDetail({ tx }: { tx: Transaction }) {
         : ''
 
     const ok = await confirm({
-      title: `Excluir esta ${tx.type === 'PURCHASE' ? 'compra' : tx.type === 'PAYMENT' ? 'prestação' : 'venda'}?`,
+      title: `Excluir ${EXCLUDE_LABEL[tx.type]}?`,
       message: `${formatBRL(tx.amountCents)} · ${METHOD_LABEL[tx.paymentMethod]}. ${effect}${extra}`,
       confirmLabel: 'Excluir',
       cancelLabel: 'Manter',
@@ -74,7 +82,9 @@ export function TransactionDetail({ tx }: { tx: Transaction }) {
             'grid h-14 w-14 place-items-center rounded-2xl',
             isFicha
               ? 'bg-clay-50 text-clay-600'
-              : tx.type === 'PURCHASE'
+              : tx.type === 'EXPENSE'
+                ? 'bg-clay-50 text-clay-600'
+                : tx.type === 'PURCHASE'
                 ? 'bg-danger-50 text-danger-600'
                 : tx.type === 'PAYMENT'
                   ? 'bg-brand-50 text-brand-600'
@@ -84,8 +94,8 @@ export function TransactionDetail({ tx }: { tx: Transaction }) {
           <Icon className="h-7 w-7" aria-hidden />
         </span>
         <p className="mt-3 text-sm font-semibold text-muted">{TYPE_LABEL[tx.type]}</p>
-        <p className={cn('num text-4xl font-bold leading-tight', tx.type === 'PURCHASE' && 'text-danger-600')}>
-          {tx.type === 'PURCHASE' ? '−' : ''}
+        <p className={cn('num text-4xl font-bold leading-tight', isOut && 'text-danger-600')}>
+          {isOut ? '−' : ''}
           {formatBRL(tx.amountCents)}
         </p>
         {isFicha && (
@@ -117,7 +127,7 @@ export function TransactionDetail({ tx }: { tx: Transaction }) {
           </Row>
         )}
         {tx.supplier && <Row label="Fornecedor">{tx.supplier}</Row>}
-        {tx.note && <Row label="Observação">{tx.note}</Row>}
+        {tx.note && <Row label={tx.type === 'EXPENSE' ? 'Descrição' : 'Observação'}>{tx.note}</Row>}
       </dl>
 
       <div className="mt-5 grid grid-cols-2 gap-3">

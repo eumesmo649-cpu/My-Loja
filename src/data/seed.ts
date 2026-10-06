@@ -136,6 +136,20 @@ export function buildDemoData(now: Date = new Date()): Pick<AppData, 'customers'
     }
   }
 
+  // Despesas fixas dos últimos meses (valores fixos, sem sorteio: não alteram o resto dos dados de exemplo)
+  const FIXED_EXPENSES: [string, number, number, PaymentMethod][] = [
+    ['Aluguel da loja', 5, 120000, 'PIX'],
+    ['Energia', 12, 28000, 'PIX'],
+    ['Internet', 15, 12000, 'DEBIT'],
+    ['Embalagens', 20, 9500, 'CASH'],
+  ]
+  for (let m = 4; m >= 0; m--) {
+    for (const [description, day, cents, method] of FIXED_EXPENSES) {
+      const at = new Date(now.getFullYear(), now.getMonth() - m, day, 10, 0).getTime()
+      if (at < startToday) push('EXPENSE', cents, method, at, { note: description })
+    }
+  }
+
   // Movimentações de HOJE (espalhadas entre 00:01 e agora, para o Início ter conteúdo)
   const elapsed = Math.max(now.getTime() - startToday, 3600000)
   const at = (f: number) => startToday + Math.floor(elapsed * f)
@@ -150,6 +164,7 @@ export function buildDemoData(now: Date = new Date()): Pick<AppData, 'customers'
   const owing = [...balancesByCustomer(transactions).entries()].find(([id, b]) => b > 5000 && id !== ficha.id)
   if (owing) push('PAYMENT', 5000, 'PIX', at(0.9), { customerId: owing[0] })
   push('PURCHASE', 12000, 'CASH', at(0.2), { supplier: SUPPLIERS[0], note: 'Sacolas e etiquetas' })
+  push('EXPENSE', 4500, 'CASH', at(0.35), { note: 'Almoço da equipe' })
 
   return { customers, transactions }
 }

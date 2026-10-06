@@ -1,6 +1,8 @@
 import type { AppData, Customer, PaymentMethod, Settings, Transaction, TransactionInput } from '@/types'
 import { newId } from '@/lib/id'
+import { customerBalance } from '@/domain/balances'
 import { MAX_AMOUNT_CENTS, normalizeName } from '@/domain/validation'
+import { formatBRL } from '@/lib/money'
 
 /**
  * Operações PURAS sobre os dados (recebem o estado e devolvem o novo estado).
@@ -22,6 +24,7 @@ function assertTransactionRules(t: {
   amountCents: number
   paymentMethod: PaymentMethod
   customerId?: string | null
+  note?: string
 }) {
   if (!Number.isInteger(t.amountCents) || t.amountCents <= 0) {
     throw new DomainError('O valor precisa ser maior que zero.')
@@ -32,6 +35,9 @@ function assertTransactionRules(t: {
   }
   if (t.type === 'PAYMENT' && !t.customerId) {
     throw new DomainError('Prestação precisa de um cliente.')
+  }
+  if (t.type === 'EXPENSE' && !t.note?.trim()) {
+    throw new DomainError('Descreva a despesa.')
   }
   if (t.type !== 'SALE' && t.paymentMethod === 'FICHA') {
     throw new DomainError('Esta forma de pagamento só vale para vendas.')
@@ -66,6 +72,71 @@ export function addCustomer(
   }
 }
 
+export function updateCustomer(
+  data: AppData,
+  id: string,
+  input: { name: string; phone?: string },
+  now = new Date(),
+): { data: AppData; customer: Customer } {
+  const current = data.customers.find((c) => c.id === id && !c.deletedAt)
+  if (!current) throw new DomainError('Cliente não encontrado.')
+  const name = input.name.trim().replace(/\s+/g, ' ')
+  if (name.length < 2) throw new DomainError('Digite o nome do cliente.')
+  const dup = data.customers.find(
+    (c) => c.id !== id && !c.deletedAt && normalizeName(c.name) === normalizeName(name),
+  )
+  if (dup) throw new DomainError(`Já existe um cliente chamado "${dup.name}".`)
+  const customer: Customer = {
+    ...current,
+    name,
+    phone: input.phone?.trim() || undefined,
+    updatedAt: now.toISOString(),
+  }
+  return {
+    customer,
+    data: {
+      ...data,
+      customers: data.customers.map((c) => (c.id === id ? customer : c)),
+      pending: { ...data.pending, customers: addUnique(data.pending.customers, id) },
+    },
+  }
+}
+
+/**
+ * Exclui o cliente (exclusão lógica). Só é permitido sem saldo devedor, para a conta
+ * "a receber" nunca perder dinheiro de ficha sem querer. As vendas e prestações antigas
+ * continuam no histórico e nos relatórios (aparecem como "cliente removido").
+ */
+export function deleteCustomer(data: AppData, id: string, now = new Date()): AppData {
+  const current = data.customers.find((c) => c.id === id && !c.deletedAt)
+  if (!current) throw new DomainError('Cliente não encontrado.')
+  const balance = customerBalance(id, data.transactions)
+  if (balance > 0) {
+    throw new DomainError(
+      `${current.name} ainda deve ${formatBRL(balance)}. Receba o valor antes de excluir o cliente.`,
+    )
+  }
+  const iso = now.toISOString()
+  return {
+    ...data,
+    customers: data.customers.map((c) => (c.id === id ? { ...c, deletedAt: iso, updatedAt: iso } : c)),
+    pending: { ...data.pending, customers: addUnique(data.pending.customers, id) },
+  }
+}
+
+export function restoreCustomer(data: AppData, id: string, now = new Date()): AppData {
+  const current = data.customers.find((c) => c.id === id && c.deletedAt)
+  if (!current) return data
+  // se outro cliente já ocupou o nome nesse meio tempo, não restaura em duplicidade
+  const dup = data.customers.find((c) => !c.deletedAt && normalizeName(c.name) === normalizeName(current.name))
+  if (dup) throw new DomainError(`Já existe um cliente chamado "${dup.name}".`)
+  return {
+    ...data,
+    customers: data.customers.map((c) => (c.id === id ? { ...c, deletedAt: null, updatedAt: now.toISOString() } : c)),
+    pending: { ...data.pending, customers: addUnique(data.pending.customers, id) },
+  }
+}
+
 export function addTransaction(
   data: AppData,
   input: TransactionInput,
@@ -82,11 +153,13 @@ export function addTransaction(
     amountCents: input.amountCents,
     paymentMethod: input.paymentMethod,
     customerId:
-      input.type === 'PURCHASE' || (input.type === 'SALE' && input.paymentMethod !== 'FICHA')
+      input.type === 'PURCHASE' ||
+      input.type === 'EXPENSE' ||
+      (input.type === 'SALE' && input.paymentMethod !== 'FICHA')
         ? null
         : input.customerId ?? null,
     supplier: input.type === 'PURCHASE' ? input.supplier?.trim() || undefined : undefined,
-    note: input.type === 'PURCHASE' ? input.note?.trim() || undefined : undefined,
+    note: input.type === 'PURCHASE' || input.type === 'EXPENSE' ? input.note?.trim() || undefined : undefined,
     createdAt: input.createdAt ?? iso,
     updatedAt: iso,
     deletedAt: null,
@@ -121,14 +194,10 @@ export function updateTransaction(
   const merged: Transaction = { ...current, ...patch }
   // Venda que deixou de ser ficha não guarda cliente.
   if (merged.type === 'SALE' && merged.paymentMethod !== 'FICHA') merged.customerId = null
-  if (merged.type === 'PURCHASE') merged.customerId = null
-  if (merged.type !== 'PURCHASE') {
-    merged.supplier = undefined
-    merged.note = undefined
-  } else {
-    merged.supplier = merged.supplier?.trim() || undefined
-    merged.note = merged.note?.trim() || undefined
-  }
+  if (merged.type === 'PURCHASE' || merged.type === 'EXPENSE') merged.customerId = null
+  merged.supplier = merged.type === 'PURCHASE' ? merged.supplier?.trim() || undefined : undefined
+  merged.note =
+    merged.type === 'PURCHASE' || merged.type === 'EXPENSE' ? merged.note?.trim() || undefined : undefined
   assertTransactionRules(merged)
   merged.updatedAt = now.toISOString()
   return {

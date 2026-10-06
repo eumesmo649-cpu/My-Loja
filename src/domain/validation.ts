@@ -1,6 +1,6 @@
 import type { Customer, PaymentMethod } from '@/types'
 
-export type FieldErrors = Partial<Record<'amount' | 'customer' | 'method' | 'name', string>>
+export type FieldErrors = Partial<Record<'amount' | 'customer' | 'method' | 'name' | 'description', string>>
 
 /** Teto de segurança para evitar digitação com zeros a mais (R$ 10 milhões). */
 export const MAX_AMOUNT_CENTS = 1_000_000_000
@@ -52,6 +52,21 @@ export function validatePurchase(input: {
   const amountError = validateAmount(input.amountCents)
   if (amountError) errors.amount = amountError
   if (!input.method || input.method === 'FICHA') errors.method = 'Escolha a forma de pagamento.'
+  return errors
+}
+
+export function validateExpense(input: {
+  amountCents: number | null
+  method: PaymentMethod | null
+  description: string
+}): FieldErrors {
+  const errors: FieldErrors = {}
+  const amountError = validateAmount(input.amountCents)
+  if (amountError) errors.amount = amountError
+  if (!input.method || input.method === 'FICHA') errors.method = 'Escolha a forma de pagamento.'
+  const d = input.description.trim()
+  if (d.length < 2) errors.description = 'Descreva a despesa (ex.: aluguel, energia).'
+  else if (d.length > 160) errors.description = 'A descrição está muito longa.'
   return errors
 }
 

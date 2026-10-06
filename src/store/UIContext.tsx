@@ -10,7 +10,9 @@ export type SheetState =
   | { kind: 'sale'; customerId?: string }
   | { kind: 'payment'; customerId?: string }
   | { kind: 'purchase' }
+  | { kind: 'expense' }
   | { kind: 'customer' }
+  | { kind: 'customerEdit'; id: string }
   | { kind: 'detail'; id: string }
   | { kind: 'edit'; id: string }
   | null

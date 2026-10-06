@@ -1,6 +1,7 @@
 /** Tipos centrais do MyLoja. Todos os valores monetários são inteiros em CENTAVOS. */
 
-export type TransactionType = 'SALE' | 'PAYMENT' | 'PURCHASE'
+/** SALE venda · PAYMENT prestação de ficha · PURCHASE compra de mercadoria · EXPENSE despesa da loja (aluguel, luz...) */
+export type TransactionType = 'SALE' | 'PAYMENT' | 'PURCHASE' | 'EXPENSE'
 
 export type PaymentMethod = 'PIX' | 'CASH' | 'DEBIT' | 'CREDIT' | 'FICHA'
 
@@ -25,6 +26,7 @@ export interface Transaction {
   /** Obrigatório para PAYMENT e para SALE em FICHA. */
   customerId?: string | null
   supplier?: string
+  /** Observação da compra ou DESCRIÇÃO da despesa (obrigatória em EXPENSE). */
   note?: string
   createdAt: string
   updatedAt: string
@@ -42,6 +44,8 @@ export interface Settings {
   ownerName: string
   lastMethod: PaymentMethod
   closings: Record<string, ClosingRecord>
+  /** Percentual de lucro estimado por mês ('2026-10' -> 3500 = 35,00%), em centésimos de ponto percentual. */
+  profitMarginBp: Record<string, number>
 }
 
 export interface PendingSync {

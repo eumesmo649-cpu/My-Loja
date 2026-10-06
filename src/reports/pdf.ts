@@ -1,6 +1,7 @@
 import type { MonthReport, YearReport } from '@/domain/reports'
 import { METHOD_LABEL, SALE_METHODS } from '@/domain/methods'
 import { formatDayFull, monthName, capitalize } from '@/lib/dates'
+import { formatPercent } from '@/domain/profit'
 import { formatBRL } from '@/lib/money'
 
 /**
@@ -142,7 +143,9 @@ export async function generateMonthPdf(r: MonthReport): Promise<void> {
   y = kpiRow(doc, y, [
     { label: 'Total vendido', value: formatBRL(r.salesCents) },
     { label: 'Total recebido', value: formatBRL(r.receivedCents) },
-    { label: 'Compras', value: formatBRL(r.purchasesCents) },
+    r.estimatedProfitCents !== null
+      ? { label: `Lucro estimado (${formatPercent(r.marginBp ?? 0)})`, value: formatBRL(r.estimatedProfitCents) }
+      : { label: 'Despesas', value: formatBRL(r.expensesCents) },
   ])
 
   y = section(doc, y, 'Resumo do mês')
@@ -156,8 +159,39 @@ export async function generateMonthPdf(r: MonthReport): Promise<void> {
     ['Vendas na ficha', formatBRL(r.fichaSalesCents)],
     ['Recebido de fichas (prestações)', formatBRL(r.fichaReceivedCents)],
     ['Contas a receber no fim do mês', formatBRL(r.receivableCents)],
+    ['Compras de mercadoria', formatBRL(r.purchasesCents)],
+    ['Despesas', formatBRL(r.expensesCents)],
     ['Comparação com o mês anterior', delta],
   ])
+
+  y = section(doc, y, 'Lucro estimado')
+  if (r.marginBp !== null && r.estimatedProfitCents !== null && r.profitAfterExpensesCents !== null) {
+    y = table(
+      doc,
+      y,
+      [
+        ['Percentual de lucro estimado (sobre o total vendido)', formatPercent(r.marginBp)],
+        ['Lucro estimado', formatBRL(r.estimatedProfitCents)],
+        ['Despesas do mês', `${r.expensesCents > 0 ? '-' : ''}${formatBRL(r.expensesCents)}`],
+        [
+          'Lucro após despesas',
+          `${r.profitAfterExpensesCents < 0 ? '-' : ''}${formatBRL(Math.abs(r.profitAfterExpensesCents))}`,
+        ],
+      ],
+      { boldLast: true },
+    )
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(9)
+    doc.setTextColor(...MUTED)
+    doc.text('Estimativa: o percentual já considera o custo das peças, por isso as compras não são descontadas de novo.', MARGIN, y - 2)
+    y += 6
+  } else {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(...MUTED)
+    doc.text('Percentual de lucro não informado para este mês.', MARGIN + 2, y + 6)
+    y += 14
+  }
 
   y = section(doc, y, 'Vendas por forma de pagamento')
   y = table(
@@ -166,7 +200,7 @@ export async function generateMonthPdf(r: MonthReport): Promise<void> {
     SALE_METHODS.map((m) => [METHOD_LABEL[m], formatBRL(r.salesByMethod[m])] as [string, string]),
   )
 
-  if (y > 215) {
+  if (y > 205) {
     doc.addPage()
     y = 24
   }
@@ -189,7 +223,9 @@ export async function generateYearPdf(r: YearReport): Promise<void> {
   y = kpiRow(doc, y, [
     { label: 'Total vendido', value: formatBRL(r.salesCents) },
     { label: 'Total recebido', value: formatBRL(r.receivedCents) },
-    { label: 'Compras', value: formatBRL(r.purchasesCents) },
+    r.monthsWithMargin > 0
+      ? { label: 'Lucro estimado do ano', value: formatBRL(r.profitCents) }
+      : { label: 'Despesas', value: formatBRL(r.expensesCents) },
   ])
 
   y = section(doc, y, 'Resumo do ano')
@@ -198,7 +234,30 @@ export async function generateYearPdf(r: YearReport): Promise<void> {
     ['Melhor mês', r.best ? `${capitalize(monthName(r.best.month0))} · ${formatBRL(r.best.salesCents)}` : '-'],
     ['Pior mês', r.worst ? `${capitalize(monthName(r.worst.month0))} · ${formatBRL(r.worst.salesCents)}` : '-'],
     ['Contas a receber no fim do ano', formatBRL(r.receivableCents)],
+    ['Compras de mercadoria', formatBRL(r.purchasesCents)],
+    ['Despesas', formatBRL(r.expensesCents)],
+    ...(r.monthsWithMargin > 0
+      ? ([
+          ['Lucro estimado (soma dos meses)', formatBRL(r.profitCents)],
+          [
+            'Lucro após despesas',
+            `${r.profitAfterExpensesCents < 0 ? '-' : ''}${formatBRL(Math.abs(r.profitAfterExpensesCents))}`,
+          ],
+        ] as [string, string][])
+      : ([['Lucro estimado', 'percentual não informado']] as [string, string][])),
   ])
+  if (r.monthsWithMargin > 0 && r.monthsMissingMargin.length > 0) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(9)
+    doc.setTextColor(...MUTED)
+    doc.text(
+      `Sem percentual (fora da soma do lucro): ${r.monthsMissingMargin.map((m) => capitalize(monthName(m))).join(', ')}.`,
+      MARGIN,
+      y - 2,
+      { maxWidth: CONTENT_W },
+    )
+    y += 6
+  }
 
   y = section(doc, y, 'Evolução das vendas')
   y = barChart(
@@ -208,39 +267,43 @@ export async function generateYearPdf(r: YearReport): Promise<void> {
     r.months.map((m) => ({ label: capitalize(monthName(m.month0)).slice(0, 3), value: m.salesCents })),
   )
 
-  if (y > 190) {
+  if (y > 150) {
     doc.addPage()
     y = 24
   }
-  y = section(doc, y, 'Mês a mês')
-  // cabeçalho da tabela
+  y = section(doc, y, 'Mês a mês (cada mês usa o seu percentual de lucro)')
+  const cols = { month: MARGIN + 2, sales: 66, received: 94, expenses: 122, pct: 142, profit: PAGE_W - MARGIN - 2 }
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(9.5)
   doc.setTextColor(...MUTED)
-  const cols = [MARGIN + 2, 98, 140, PAGE_W - MARGIN - 2]
-  doc.text('Mês', cols[0], y + 6)
-  doc.text('Vendas', cols[1], y + 6, { align: 'right' })
-  doc.text('Recebido', cols[2], y + 6, { align: 'right' })
-  doc.text('Compras', cols[3], y + 6, { align: 'right' })
+  doc.text('Mês', cols.month, y + 6)
+  doc.text('Vendas', cols.sales, y + 6, { align: 'right' })
+  doc.text('Recebido', cols.received, y + 6, { align: 'right' })
+  doc.text('Despesas', cols.expenses, y + 6, { align: 'right' })
+  doc.text('%', cols.pct, y + 6, { align: 'right' })
+  doc.text('Lucro est.', cols.profit, y + 6, { align: 'right' })
   doc.setDrawColor(...LINE)
   doc.line(MARGIN, y + 9, PAGE_W - MARGIN, y + 9)
   y += 9
-  doc.setFont('helvetica', 'normal')
   doc.setTextColor(...INK)
   r.months.forEach((m) => {
-    doc.setFontSize(10)
-    doc.text(capitalize(monthName(m.month0)), cols[0], y + 6)
-    doc.text(formatBRL(m.salesCents), cols[1], y + 6, { align: 'right' })
-    doc.text(formatBRL(m.receivedCents), cols[2], y + 6, { align: 'right' })
-    doc.text(formatBRL(m.purchasesCents), cols[3], y + 6, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5)
+    doc.text(capitalize(monthName(m.month0)), cols.month, y + 6)
+    doc.text(formatBRL(m.salesCents), cols.sales, y + 6, { align: 'right' })
+    doc.text(formatBRL(m.receivedCents), cols.received, y + 6, { align: 'right' })
+    doc.text(formatBRL(m.expensesCents), cols.expenses, y + 6, { align: 'right' })
+    doc.text(m.marginBp === null ? '-' : formatPercent(m.marginBp), cols.pct, y + 6, { align: 'right' })
+    doc.text(m.profitCents === null ? '-' : formatBRL(m.profitCents), cols.profit, y + 6, { align: 'right' })
     doc.line(MARGIN, y + 9, PAGE_W - MARGIN, y + 9)
     y += 9
   })
   doc.setFont('helvetica', 'bold')
-  doc.text('Total', cols[0], y + 7)
-  doc.text(formatBRL(r.salesCents), cols[1], y + 7, { align: 'right' })
-  doc.text(formatBRL(r.receivedCents), cols[2], y + 7, { align: 'right' })
-  doc.text(formatBRL(r.purchasesCents), cols[3], y + 7, { align: 'right' })
+  doc.text('Total', cols.month, y + 7)
+  doc.text(formatBRL(r.salesCents), cols.sales, y + 7, { align: 'right' })
+  doc.text(formatBRL(r.receivedCents), cols.received, y + 7, { align: 'right' })
+  doc.text(formatBRL(r.expensesCents), cols.expenses, y + 7, { align: 'right' })
+  doc.text(r.monthsWithMargin > 0 ? formatBRL(r.profitCents) : '-', cols.profit, y + 7, { align: 'right' })
 
   save(doc, `myloja-relatorio-${r.year}.pdf`)
 }

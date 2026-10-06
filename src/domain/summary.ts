@@ -25,10 +25,15 @@ export interface Summary {
   purchasesCount: number
   purchasesByMethod: Record<CashMethod, number>
 
+  /** Despesas da loja (aluguel, energia...): saída de dinheiro, separada da compra de mercadoria */
+  expensesCents: number
+  expensesCount: number
+  expensesByMethod: Record<CashMethod, number>
+
   /** Dinheiro que entrou: vendas à vista + prestações recebidas */
   receivedCents: number
   receivedByMethod: Record<CashMethod, number>
-  /** Recebido menos compras pagas */
+  /** Recebido menos compras e despesas pagas */
   netCents: number
 }
 
@@ -45,6 +50,9 @@ export function summarize(txs: Transaction[]): Summary {
     purchasesCents: 0,
     purchasesCount: 0,
     purchasesByMethod: emptyCashByMethod(),
+    expensesCents: 0,
+    expensesCount: 0,
+    expensesByMethod: emptyCashByMethod(),
     receivedCents: 0,
     receivedByMethod: emptyCashByMethod(),
     netCents: 0,
@@ -75,11 +83,16 @@ export function summarize(txs: Transaction[]): Summary {
       s.purchasesCents += t.amountCents
       s.purchasesCount += 1
       if (m in s.purchasesByMethod) s.purchasesByMethod[m] += t.amountCents
+    } else if (t.type === 'EXPENSE') {
+      const m = t.paymentMethod as CashMethod
+      s.expensesCents += t.amountCents
+      s.expensesCount += 1
+      if (m in s.expensesByMethod) s.expensesByMethod[m] += t.amountCents
     }
   }
 
   s.receivedCents = s.cashSalesCents + s.paymentsCents
-  s.netCents = s.receivedCents - s.purchasesCents
+  s.netCents = s.receivedCents - s.purchasesCents - s.expensesCents
   return s
 }
 

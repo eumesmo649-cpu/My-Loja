@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, FileText, TrendingDown, TrendingUp } from 'lucide-react'
 import { useStore } from '@/store/StoreContext'
 import { useUI } from '@/store/UIContext'
-import { availableYears, monthReport, yearReport } from '@/domain/reports'
+import { availableYears, monthReport, yearReport, type MonthReport } from '@/domain/reports'
+import { bpToInput, formatPercent, lastMarginBefore, marginKey, parsePercentToBp } from '@/domain/profit'
 import { capitalize, formatMonthYear, monthName, monthShort } from '@/lib/dates'
 import { formatBRL } from '@/lib/money'
 import { cn } from '@/lib/cn'
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, SectionTitle } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Segmented } from '@/components/ui/Segmented'
+import { TextField } from '@/components/ui/TextField'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { BarChart } from '@/components/charts/BarChart'
 import { PaymentBreakdown } from '@/components/PaymentBreakdown'
@@ -33,6 +35,84 @@ function Stat({ label, value, tone, hint }: { label: string; value: string; tone
   )
 }
 
+/** Percentual de lucro estimado do mês (salvo automaticamente) e o lucro que resulta dele. */
+function ProfitCard({
+  report,
+  margins,
+  onSave,
+}: {
+  report: MonthReport
+  margins: Record<string, number>
+  onSave: (bp: number | null) => void
+}) {
+  const [text, setText] = useState(report.marginBp === null ? '' : bpToInput(report.marginBp))
+  const [error, setError] = useState<string>()
+  const suggestion = report.marginBp === null ? lastMarginBefore(margins, report.year, report.month0) : null
+
+  const change = (value: string) => {
+    setText(value.replace(/[^\d.,]/g, '').slice(0, 6))
+    const parsed = parsePercentToBp(value.replace(/[^\d.,]/g, ''))
+    if (parsed === 'invalid') {
+      setError('Digite um percentual entre 0 e 100, como 35 ou 32,5.')
+      return
+    }
+    setError(undefined)
+    onSave(parsed)
+  }
+
+  return (
+    <Card className="p-5">
+      <SectionTitle>Lucro estimado</SectionTitle>
+      <TextField
+        label="Percentual de lucro estimado (%)"
+        value={text}
+        onChange={change}
+        error={error}
+        inputMode="decimal"
+        placeholder="Ex.: 35"
+        autoComplete="off"
+      />
+      <p className="mt-2 text-sm leading-snug text-muted">
+        Como não temos o lucro de cada peça, o lucro é uma estimativa: este percentual aplicado ao total vendido no mês. Fica
+        salvo para este mês.
+      </p>
+      {suggestion && (
+        <button
+          type="button"
+          onClick={() => change(bpToInput(suggestion.bp))}
+          className="mt-3 min-h-10 rounded-xl bg-brand-50 px-3.5 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+        >
+          Usar {formatPercent(suggestion.bp)} (último percentual informado)
+        </button>
+      )}
+
+      {report.marginBp !== null && report.estimatedProfitCents !== null && report.profitAfterExpensesCents !== null && (
+        <dl className="mt-5 divide-y divide-line rounded-2xl border border-line">
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+            <dt className="text-[15px] text-muted">
+              Lucro estimado <span className="num">({formatPercent(report.marginBp)} de {formatBRL(report.salesCents)})</span>
+            </dt>
+            <dd className="num shrink-0 whitespace-nowrap text-lg font-bold text-sage-700">{formatBRL(report.estimatedProfitCents)}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+            <dt className="text-[15px] text-muted">Despesas do mês</dt>
+            <dd className="num shrink-0 whitespace-nowrap text-lg font-bold text-danger-600">{report.expensesCents > 0 ? '−' : ''}{formatBRL(report.expensesCents)}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-4 bg-sand/60 px-4 py-4">
+            <dt className="text-[15px] font-bold">Lucro após despesas</dt>
+            <dd className={cn('num shrink-0 whitespace-nowrap text-2xl font-extrabold', report.profitAfterExpensesCents < 0 ? 'text-danger-600' : 'text-ink')}>
+              {report.profitAfterExpensesCents < 0 ? '−' : ''}{formatBRL(Math.abs(report.profitAfterExpensesCents))}
+            </dd>
+          </div>
+        </dl>
+      )}
+      <p className="mt-3 text-[13px] leading-snug text-faint">
+        As compras de mercadoria não são descontadas de novo, porque o percentual já considera o custo das peças.
+      </p>
+    </Card>
+  )
+}
+
 function Stepper({ label, onPrev, onNext, nextDisabled }: { label: string; onPrev: () => void; onNext: () => void; nextDisabled?: boolean }) {
   return (
     <div className="flex items-center justify-between rounded-2xl border border-line bg-card p-1.5">
@@ -50,7 +130,7 @@ function Stepper({ label, onPrev, onNext, nextDisabled }: { label: string; onPre
 }
 
 export function ReportsPage() {
-  const { transactions } = useStore()
+  const { transactions, settings, setProfitMargin } = useStore()
   const { toast } = useUI()
   const now = useNow(60_000)
   const [tab, setTab] = useState<'month' | 'year'>('month')
@@ -60,8 +140,12 @@ export function ReportsPage() {
 
   const years = useMemo(() => availableYears(transactions, now), [transactions, now])
   const minYear = years[years.length - 1]
-  const month = useMemo(() => monthReport(transactions, year, month0, now), [transactions, year, month0, now])
-  const yearRep = useMemo(() => yearReport(transactions, year, now), [transactions, year, now])
+  const margins = settings.profitMarginBp
+  const month = useMemo(
+    () => monthReport(transactions, year, month0, now, margins[marginKey(year, month0)] ?? null),
+    [transactions, year, month0, now, margins],
+  )
+  const yearRep = useMemo(() => yearReport(transactions, year, now, margins), [transactions, year, now, margins])
 
   const isCurrentMonth = year === now.getFullYear() && month0 === now.getMonth()
   const goMonth = (delta: number) => {
@@ -122,13 +206,21 @@ export function ReportsPage() {
               )}
             </Card>
 
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <Stat label="Total recebido" value={formatBRL(month.receivedCents)} tone="sage" hint="dinheiro que entrou" />
               <Stat label="Vendido em ficha" value={formatBRL(month.fichaSalesCents)} tone="clay" />
               <Stat label="Recebido de fichas" value={formatBRL(month.fichaReceivedCents)} />
-              <Stat label="Compras" value={formatBRL(month.purchasesCents)} tone="danger" />
+              <Stat label="Compras de mercadoria" value={formatBRL(month.purchasesCents)} tone="danger" />
+              <Stat label="Despesas" value={formatBRL(month.expensesCents)} tone="danger" hint={month.expensesCount > 0 ? `${month.expensesCount} ${month.expensesCount === 1 ? 'lançamento' : 'lançamentos'}` : undefined} />
             </div>
             <Stat label="Contas a receber no fim do mês" value={formatBRL(month.receivableCents)} tone="clay" />
+
+            <ProfitCard
+              key={marginKey(year, month0)}
+              report={month}
+              margins={margins}
+              onSave={(bp) => setProfitMargin(marginKey(year, month0), bp)}
+            />
 
             <Card className="p-5">
               <SectionTitle>Evolução das vendas no mês</SectionTitle>
@@ -161,9 +253,40 @@ export function ReportsPage() {
             <p className="mt-2 text-sm text-muted">Média mensal {formatBRL(yearRep.averageMonthlySalesCents)}</p>
           </Card>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Card className="p-5">
+            <SectionTitle>Lucro estimado do ano</SectionTitle>
+            {yearRep.monthsWithMargin === 0 ? (
+              <p className="text-[15px] leading-relaxed text-muted">
+                Ainda não há percentual de lucro informado em nenhum mês de {year}. Informe em <strong>Relatórios → Mensal</strong>, no
+                campo "Percentual de lucro estimado". O lucro do ano é a soma dos lucros de cada mês, cada um com o seu percentual.
+              </p>
+            ) : (
+              <>
+                <p className="num text-[40px] font-extrabold leading-none tracking-tight">{formatBRL(yearRep.profitCents)}</p>
+                <p className="mt-2 text-sm text-muted">
+                  Soma dos lucros estimados de {yearRep.monthsWithMargin} {yearRep.monthsWithMargin === 1 ? 'mês' : 'meses'}, cada um com o
+                  percentual do próprio mês.
+                </p>
+                <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-sand/60 px-4 py-3.5">
+                  <span className="text-[15px] font-bold">Lucro após despesas</span>
+                  <span className={cn('num text-xl font-extrabold', yearRep.profitAfterExpensesCents < 0 && 'text-danger-600')}>
+                    {yearRep.profitAfterExpensesCents < 0 ? '−' : ''}{formatBRL(Math.abs(yearRep.profitAfterExpensesCents))}
+                  </span>
+                </div>
+              </>
+            )}
+            {yearRep.monthsWithMargin > 0 && yearRep.monthsMissingMargin.length > 0 && (
+              <p role="status" className="mt-3 rounded-2xl bg-clay-50 px-4 py-3 text-[14px] leading-snug text-clay-700">
+                Faltou informar o percentual em {yearRep.monthsMissingMargin.map((m) => capitalize(monthName(m))).join(', ')}. Esses meses não
+                entraram na soma do lucro.
+              </p>
+            )}
+          </Card>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <Stat label="Total recebido" value={formatBRL(yearRep.receivedCents)} tone="sage" />
-            <Stat label="Compras" value={formatBRL(yearRep.purchasesCents)} tone="danger" />
+            <Stat label="Compras de mercadoria" value={formatBRL(yearRep.purchasesCents)} tone="danger" />
+            <Stat label="Despesas" value={formatBRL(yearRep.expensesCents)} tone="danger" />
             <Stat label="Melhor mês" value={yearRep.best ? capitalize(monthName(yearRep.best.month0)) : '—'} hint={yearRep.best ? formatBRL(yearRep.best.salesCents) : undefined} />
             <Stat label="Pior mês" value={yearRep.worst ? capitalize(monthName(yearRep.worst.month0)) : '—'} hint={yearRep.worst ? formatBRL(yearRep.worst.salesCents) : undefined} />
           </div>
@@ -182,13 +305,15 @@ export function ReportsPage() {
               <SectionTitle>Mês a mês</SectionTitle>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[460px] text-left text-[15px]">
+              <table className="w-full min-w-[640px] text-left text-[15px]">
                 <thead>
                   <tr className="border-y border-line text-sm text-muted">
                     <th className="px-5 py-2.5 font-semibold">Mês</th>
                     <th className="px-3 py-2.5 text-right font-semibold">Vendas</th>
                     <th className="px-3 py-2.5 text-right font-semibold">Recebido</th>
-                    <th className="px-5 py-2.5 text-right font-semibold">Compras</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Compras</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Despesas</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">Lucro est.</th>
                   </tr>
                 </thead>
                 <tbody className="num">
@@ -197,10 +322,31 @@ export function ReportsPage() {
                       <th scope="row" className="px-5 py-3 font-semibold">{capitalize(monthName(m.month0))}</th>
                       <td className="px-3 py-3 text-right">{formatBRL(m.salesCents)}</td>
                       <td className="px-3 py-3 text-right text-sage-700">{formatBRL(m.receivedCents)}</td>
-                      <td className="px-5 py-3 text-right text-danger-700">{formatBRL(m.purchasesCents)}</td>
+                      <td className="px-3 py-3 text-right text-danger-700">{formatBRL(m.purchasesCents)}</td>
+                      <td className="px-3 py-3 text-right text-danger-700">{formatBRL(m.expensesCents)}</td>
+                      <td className="px-5 py-3 text-right">
+                        {m.profitCents === null ? (
+                          <span className="text-faint" title="Percentual não informado">—</span>
+                        ) : (
+                          <>
+                            {formatBRL(m.profitCents)}
+                            <span className="block text-xs font-medium text-muted">{formatPercent(m.marginBp ?? 0)}</span>
+                          </>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="num border-t-2 border-line bg-sand/50 font-bold">
+                  <tr>
+                    <th scope="row" className="px-5 py-3">Total</th>
+                    <td className="px-3 py-3 text-right">{formatBRL(yearRep.salesCents)}</td>
+                    <td className="px-3 py-3 text-right">{formatBRL(yearRep.receivedCents)}</td>
+                    <td className="px-3 py-3 text-right">{formatBRL(yearRep.purchasesCents)}</td>
+                    <td className="px-3 py-3 text-right">{formatBRL(yearRep.expensesCents)}</td>
+                    <td className="px-5 py-3 text-right">{yearRep.monthsWithMargin > 0 ? formatBRL(yearRep.profitCents) : '—'}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </Card>
