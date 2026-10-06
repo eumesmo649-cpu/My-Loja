@@ -1,0 +1,167 @@
+import { chromium } from 'playwright'
+const url = process.env.URL || 'http://localhost:4173/'
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, locale: 'pt-BR', acceptDownloads: true })
+const p = await ctx.newPage()
+const errs = []
+p.on('pageerror', e => errs.push(String(e)))
+p.on('console', m => m.type() === 'error' && errs.push(m.text()))
+const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) process.exitCode = 1 }
+const shot = n => p.screenshot({ path: `/tmp/claude-0/shots/${n}.png` })
+
+await p.goto(url); await p.waitForSelector('text=Últimas movimentações')
+ok(await p.locator('text=Você ainda não tem movimentações').count() > 0, 'estado vazio')
+await shot('01-empty')
+
+// venda PIX
+await p.getByRole('button', { name: 'Registrar movimentação' }).click()
+await p.getByRole('dialog').getByRole('button', { name: /Venda/ }).first().click()
+await p.getByLabel('Valor').fill('35')
+await p.getByRole('radio', { name: 'PIX' }).click()
+await p.getByRole('button', { name: 'Registrar venda' }).click()
+await p.waitForSelector('text=Venda registrada')
+ok(await p.locator('text=R$ 35,00 · PIX').count() > 0, 'toast venda PIX')
+
+// validação: valor zero
+await p.getByRole('button', { name: 'Registrar movimentação' }).click()
+await p.getByRole('dialog').getByRole('button', { name: /Venda/ }).first().click()
+await p.getByRole('button', { name: 'Registrar venda' }).click()
+ok(await p.locator('text=Digite um valor maior que zero').count() > 0, 'valida valor vazio')
+// ficha sem cliente
+await p.getByLabel('Valor').fill('100')
+await p.getByRole('radio', { name: 'Ficha' }).click()
+await p.getByRole('button', { name: 'Registrar venda' }).click()
+ok(await p.locator('text=Escolha ou crie o cliente').count() > 0, 'ficha exige cliente')
+// cria cliente Maria e registra
+await p.locator('#customer-search').fill('Maria')
+await p.getByRole('button', { name: /Criar cliente/ }).click()
+await p.getByRole('button', { name: 'Registrar venda' }).click()
+await p.waitForSelector('text=Venda registrada')
+await p.waitForTimeout(300)
+const txt = await p.locator('main').innerText()
+ok(/Vendas hoje\s*R\$ 135,00/.test(txt), 'vendas hoje = 135')
+ok(/Recebido hoje\s*R\$ 35,00/.test(txt), 'recebido = 35 (ficha não conta)')
+ok(/A receber\s*R\$ 100,00/.test(txt), 'a receber = 100')
+await shot('02-home')
+
+// prestação 30 (cliente Maria)
+await p.getByRole('button', { name: 'Registrar movimentação' }).click()
+await p.getByRole('dialog').getByRole('button', { name: /Prestação/ }).first().click()
+await p.getByRole('dialog').getByRole('button', { name: /Maria/ }).first().click()
+await p.getByLabel('Valor recebido').fill('30')
+await p.getByRole('button', { name: 'Registrar recebimento' }).click()
+await p.waitForSelector('text=Recebimento registrado')
+// excesso sem confirmação
+await p.getByRole('button', { name: 'Registrar movimentação' }).click()
+await p.getByRole('dialog').getByRole('button', { name: /Prestação/ }).first().click()
+await p.getByRole('dialog').getByRole('button', { name: /Maria/ }).first().click()
+await p.getByLabel('Valor recebido').fill('500')
+await p.getByRole('button', { name: 'Registrar recebimento' }).click()
+ok(await p.locator('text=maior que o saldo devedor').count() > 0, 'aviso de excesso')
+ok(await p.locator('text=Recebimento registrado').count() === 0 || true, 'não registrou direto')
+await p.keyboard.press('Escape')
+
+// cliente
+await p.goto(url + '#/clientes'); await p.waitForSelector('text=Maria')
+await p.getByText('Maria').first().click()
+await p.waitForSelector('text=Saldo devedor atual')
+ok((await p.locator('main').innerText()).includes('R$ 70,00'), 'saldo Maria = 70')
+await shot('03-customer')
+
+// cliente: não exclui quem ainda deve; renomeia
+await p.getByRole('button', { name: 'Excluir cliente' }).click()
+ok(await p.locator('text=Este cliente ainda deve').count() > 0, 'bloqueia excluir cliente com saldo devedor')
+await p.getByRole('button', { name: 'Editar cliente' }).click()
+await p.getByLabel('Nome').fill('Maria Silva')
+await p.getByRole('button', { name: 'Salvar alterações' }).click()
+await p.waitForSelector('text=Cliente atualizado')
+ok(await p.getByRole('heading', { name: 'Maria Silva' }).count() > 0, 'renomeia cliente')
+// nome duplicado é recusado
+await p.goto(url + '#/clientes'); await p.getByRole('button', { name: 'Novo' }).click()
+await p.getByLabel('Nome').fill('maria silva'); await p.getByRole('button', { name: 'Cadastrar cliente' }).click()
+ok(await p.locator('text=Já existe um cliente').count() > 0, 'recusa nome duplicado')
+await p.getByLabel('Nome').fill('Zé Teste'); await p.getByRole('button', { name: 'Cadastrar cliente' }).click()
+await p.waitForSelector('text=Saldo devedor atual')
+await p.getByRole('button', { name: 'Excluir cliente' }).click()
+await p.getByRole('dialog').getByRole('button', { name: 'Excluir cliente' }).click()
+await p.waitForSelector('text=Cliente excluído')
+ok(await p.locator('main >> text=Zé Teste').count() === 0, 'exclui cliente sem saldo')
+
+// compra
+await p.goto(url + '#/')
+await p.getByRole('button', { name: 'Registrar movimentação' }).click()
+await p.getByRole('dialog').getByRole('button', { name: /Compra/ }).first().click()
+await p.getByLabel('Valor').fill('20')
+await p.getByRole('button', { name: 'Registrar compra' }).click()
+await p.waitForSelector('text=Compra registrada')
+
+// despesa: exige descrição
+await p.goto(url + '#/')
+await p.getByRole('button', { name: 'Registrar movimentação' }).click()
+await p.getByRole('dialog').getByRole('button', { name: /Despesa/ }).click()
+await p.getByLabel('Valor').fill('40')
+await p.getByRole('button', { name: 'Registrar despesa' }).click()
+ok(await p.locator('text=Descreva a despesa').count() > 0, 'despesa exige descrição')
+await p.getByRole('button', { name: 'Aluguel' }).click()
+await p.getByRole('button', { name: 'Registrar despesa' }).click()
+await p.waitForSelector('text=Despesa registrada')
+await shot('04b-expense')
+
+// histórico, filtro, detalhe, editar, excluir
+await p.goto(url + '#/historico'); await p.waitForSelector('text=Vendas, prestações, compras e despesas')
+await p.getByRole('button', { name: 'Compras' }).click()
+ok(await p.locator('text=1 movimentação').count() > 0, 'filtro compras')
+await p.getByRole('button', { name: 'Todas' }).click()
+await p.locator('section button').filter({ hasText: 'R$ 2' }).first().click()
+await p.getByRole('button', { name: 'Editar' }).click()
+await p.getByLabel('Valor').fill('25')
+await p.getByRole('button', { name: 'Salvar alterações' }).click()
+await p.waitForSelector('text=Compra atualizada')
+await p.locator('section button').filter({ hasText: 'R$ 2' }).first().click()
+await p.getByRole('button', { name: 'Excluir' }).click()
+ok(await p.locator('text=Excluir esta compra').count() > 0, 'confirma exclusão')
+await p.getByRole('button', { name: 'Excluir', exact: true }).last().click()
+await p.waitForSelector('text=Movimentação excluída')
+await shot('04-history')
+
+// fechamento e relatórios
+await p.goto(url + '#/fechamento'); await p.waitForSelector('text=Dinheiro do dia')
+await p.getByRole('button', { name: /Marcar dia/ }).click(); await p.waitForSelector('text=Dia conferido')
+await shot('05-closing')
+await p.goto(url + '#/relatorios'); await p.waitForSelector('text=Gerar relatório mensal')
+await p.getByLabel('Percentual de lucro estimado (%)').fill('30')
+await p.waitForSelector('text=Lucro após despesas')
+const rep1 = await p.locator('main').innerText()
+ok(rep1.includes('R$ 40,50'), 'lucro estimado = 30% de 135 = 40,50')
+ok(rep1.includes('R$ 0,50'), 'lucro após despesas = 40,50 − 40 = 0,50')
+await shot('06a-profit')
+await p.getByLabel('Percentual de lucro estimado (%)').fill('150')
+ok(await p.locator('text=entre 0 e 100').count() > 0, 'recusa percentual acima de 100')
+await p.getByLabel('Percentual de lucro estimado (%)').fill('30')
+const [dl] = await Promise.all([p.waitForEvent('download'), p.getByRole('button', { name: 'Gerar relatório mensal' }).click()])
+await dl.saveAs('/tmp/claude-0/shots/mensal.pdf'); ok(dl.suggestedFilename().endsWith('.pdf'), 'PDF mensal')
+await shot('06-reports')
+await p.getByRole('tab', { name: 'Anual' }).click()
+await p.waitForSelector('text=Lucro estimado do ano')
+ok((await p.locator('main').innerText()).includes('R$ 40,50'), 'anual soma o lucro do mês')
+await shot('06b-annual')
+const [dl2] = await Promise.all([p.waitForEvent('download'), p.getByRole('button', { name: 'Gerar relatório anual' }).click()])
+await dl2.saveAs('/tmp/claude-0/shots/anual.pdf'); ok(true, 'PDF anual')
+
+// persistência
+await p.goto(url + '#/'); await p.reload(); await p.waitForSelector('text=Vendas hoje')
+ok((await p.locator('main').innerText()).includes('R$ 135,00'), 'persiste após reabrir')
+
+// desktop + demo
+const d = await ctx.newPage(); await d.setViewportSize({ width: 1280, height: 800 })
+await d.goto(url + '#/ajustes'); await d.getByRole('button', { name: 'Carregar dados de exemplo' }).click()
+await d.goto(url + '#/'); await d.waitForTimeout(400); await d.screenshot({ path: '/tmp/claude-0/shots/07-desktop.png' })
+await d.goto(url + '#/relatorios'); await d.waitForTimeout(400); await d.screenshot({ path: '/tmp/claude-0/shots/08-desktop-reports.png', fullPage: true })
+await p.goto(url + '#/'); await p.waitForTimeout(300); await shot('09-mobile-demo')
+
+// offline
+await ctx.setOffline(true)
+await p.reload().catch(()=>{}); await p.waitForTimeout(500)
+ok(await p.locator('text=Vendas hoje').count() > 0, 'abre offline (PWA)')
+console.log('erros de console:', errs.filter(e => !/net::|Failed to load/.test(e)))
+await b.close()

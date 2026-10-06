@@ -13,7 +13,7 @@ React 19 · TypeScript · Vite · Tailwind CSS 4 · Lucide · vite-plugin-pwa ·
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # regras financeiras (22 testes)
+npm test           # regras financeiras (37 testes)
 npm run build      # typecheck + build de produção em dist/
 npm run preview    # serve o build (necessário para testar o PWA/offline)
 ```
@@ -34,7 +34,7 @@ Sem as duas, a sincronização fica desligada.
 ## Configurar o Supabase
 
 1. Crie um projeto em supabase.com.
-2. Em **SQL Editor**, rode o arquivo [`supabase/schema.sql`](supabase/schema.sql). Ele cria as tabelas `customers` e `transactions`, constraints de negócio, triggers e **Row Level Security** (cada usuária só enxerga as próprias linhas; anônimos não têm acesso).
+2. Em **SQL Editor**, rode o arquivo [`supabase/schema.sql`](supabase/schema.sql). (Se você já tinha rodado uma versão anterior, rode também [`supabase/migrations/001_despesas.sql`](supabase/migrations/001_despesas.sql), que adiciona as despesas.) Ele cria as tabelas `customers` e `transactions`, constraints de negócio, triggers e **Row Level Security** (cada usuária só enxerga as próprias linhas; anônimos não têm acesso).
 3. Em **Authentication → Providers**, deixe *Email* ativo. Para uso simples, desative "Confirm email" (ou confirme o e-mail após criar a conta).
 4. Preencha o `.env` e rode de novo. Em **Ajustes → Nuvem**, crie a conta / entre. O que já existe no aparelho sobe automaticamente.
 
@@ -51,9 +51,23 @@ Sem as duas, a sincronização fica desligada.
 - Venda à vista (PIX, espécie, débito, crédito): soma em **vendas** e em **recebido**.
 - Venda na **ficha**: soma em vendas e em **a receber**; recebido +0.
 - **Prestação**: soma em recebido e reduz o saldo do cliente; não é nova venda.
-- **Compra**: saída de dinheiro.
+- **Compra**: saída de dinheiro para mercadoria que será revendida.
+- **Despesa**: saída de dinheiro da loja (aluguel, energia, internet...), com **descrição obrigatória**. Fica separada das compras e reduz o saldo do dia.
 - O saldo de cada cliente é **derivado** das transações (vendas em ficha − prestações), nunca armazenado; editar ou excluir qualquer lançamento recalcula tudo.
 - Prestação acima do saldo exige confirmação explícita.
+
+## Lucro estimado
+
+Não existe lucro por peça, então o lucro é uma **estimativa por percentual**:
+
+- Em **Relatórios → Mensal** há o campo *Percentual de lucro estimado (%)*, salvo para aquele mês. Lucro estimado = total vendido × percentual.
+- **Lucro após despesas** = lucro estimado − despesas do mês. As compras de mercadoria **não** são descontadas de novo, porque o percentual já considera o custo das peças.
+- No **Relatório anual**, o lucro do ano é a **soma do lucro de cada mês**, cada um com o percentual do próprio mês. Meses com vendas e sem percentual ficam fora da soma e aparecem num aviso.
+- Percentuais ficam guardados em centésimos de ponto percentual (35% = 3500), sem números decimais imprecisos.
+
+## Clientes
+
+Na tela do cliente: **editar** (nome e telefone) e **excluir**. Só é possível excluir quem **não deve** nada (receba a ficha antes); as vendas e prestações antigas continuam no histórico e nos relatórios como "cliente removido". Há "Desfazer" logo após excluir.
 
 ## Estrutura
 
@@ -92,6 +106,7 @@ node scripts/e2e.mjs      # requer Chromium do Playwright
 
 - Os dados locais vivem no `localStorage` do navegador. Se a pessoa limpar os dados do site sem ter ativado a nuvem, perde tudo: use **Baixar cópia** ou o Supabase.
 - Uma única conta/loja; sem permissões por usuário.
+- Os percentuais de lucro e as marcações de "dia conferido" ficam só no aparelho (entram na cópia de segurança, mas não sincronizam com o Supabase).
 - Em conflito de edição entre aparelhos vence a alteração mais recente (por registro).
 - O PDF usa fonte padrão (Helvetica) e layout simples.
 - Fuso e "dia" seguem o relógio do aparelho.
