@@ -73,8 +73,8 @@ function ProfitCard({
         autoComplete="off"
       />
       <p className="mt-2 text-sm leading-snug text-muted">
-        Como não temos o lucro de cada peça, o lucro é uma estimativa: este percentual aplicado ao total vendido no mês. Fica
-        salvo para este mês.
+        Como não temos o lucro de cada peça, o lucro é uma estimativa: este percentual aplicado ao faturamento do mês, ou
+        seja, ao total recebido (Pix, espécie, débito, crédito e prestações). Fica salvo para este mês.
       </p>
       {suggestion && (
         <button
@@ -90,7 +90,7 @@ function ProfitCard({
         <dl className="mt-5 divide-y divide-line rounded-2xl border border-line">
           <div className="flex items-center justify-between gap-4 px-4 py-3.5">
             <dt className="text-[15px] text-muted">
-              Lucro estimado <span className="num">({formatPercent(report.marginBp)} de {formatBRL(report.salesCents)})</span>
+              Lucro estimado <span className="num">({formatPercent(report.marginBp)} de {formatBRL(report.receivedCents)} recebidos)</span>
             </dt>
             <dd className="num shrink-0 whitespace-nowrap text-lg font-bold text-sage-700">{formatBRL(report.estimatedProfitCents)}</dd>
           </div>
@@ -265,7 +265,7 @@ export function ReportsPage() {
                 <p className="num text-[40px] font-extrabold leading-none tracking-tight">{formatBRL(yearRep.profitCents)}</p>
                 <p className="mt-2 text-sm text-muted">
                   Soma dos lucros estimados de {yearRep.monthsWithMargin} {yearRep.monthsWithMargin === 1 ? 'mês' : 'meses'}, cada um com o
-                  percentual do próprio mês.
+                  percentual do próprio mês aplicado ao total recebido.
                 </p>
                 <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-sand/60 px-4 py-3.5">
                   <span className="text-[15px] font-bold">Lucro após despesas</span>

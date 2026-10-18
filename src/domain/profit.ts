@@ -2,7 +2,8 @@ import { parseMoneyToCents } from '@/lib/money'
 
 /**
  * Lucro ESTIMADO. Não temos o custo por peça, então a loja informa um percentual de
- * lucro sobre o total VENDIDO no mês (ex.: 35%). O percentual é guardado como inteiro em
+ * lucro sobre o FATURAMENTO do mês, que é o total RECEBIDO (vendas à vista em Pix, espécie,
+ * débito e crédito + prestações de ficha), ex.: 35%. O percentual é guardado como inteiro em
  * centésimos de ponto percentual ("basis points"): 35% = 3500, 32,5% = 3250. Sem floats.
  *
  * Obs.: o percentual já considera o custo das peças; por isso as compras de mercadoria NÃO
@@ -15,9 +16,9 @@ export function marginKey(year: number, month0: number): string {
   return `${year}-${String(month0 + 1).padStart(2, '0')}`
 }
 
-/** vendas × percentual, arredondado ao centavo. */
-export function estimatedProfitCents(salesCents: number, marginBp: number): number {
-  return Math.round((salesCents * marginBp) / 10000)
+/** faturamento (total recebido) × percentual, arredondado ao centavo. */
+export function estimatedProfitCents(revenueCents: number, marginBp: number): number {
+  return Math.round((revenueCents * marginBp) / 10000)
 }
 
 /** "35" / "32,5" -> 3500 / 3250. Vazio -> null (sem percentual). Inválido -> 'invalid'. */

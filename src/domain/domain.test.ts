@@ -325,7 +325,7 @@ describe('lucro estimado por percentual', () => {
     expect(bpToInput(3250)).toBe('32,5')
   })
 
-  it('lucro = vendas × percentual, arredondado ao centavo', () => {
+  it('lucro = faturamento (recebido) × percentual, arredondado ao centavo', () => {
     expect(estimatedProfitCents(100000, 3500)).toBe(35000)
     expect(estimatedProfitCents(33333, 3333)).toBe(11110) // 33333 × 0,3333 = 11109,6…
     expect(estimatedProfitCents(0, 3500)).toBe(0)
@@ -373,6 +373,23 @@ describe('lucro estimado por percentual', () => {
     expect(r.profitAfterExpensesCents).toBe(30000) // despesas de agosto/outubro não entram
     expect(r.monthsMissingMargin).toEqual([7, 9])
     expect(r.months[7].profitCents).toBeNull()
+  })
+
+  it('lucro estimado é sobre o TOTAL RECEBIDO (à vista + prestações), não sobre o total vendido', () => {
+    const f = [
+      tx('SALE', 100000, 'FICHA', '2026-11-02T10:00:00', { customerId: 'c1' }), // vendido, ainda não recebido
+      tx('SALE', 50000, 'PIX', '2026-11-03T10:00:00'),
+      tx('PAYMENT', 20000, 'CASH', '2026-11-04T10:00:00', { customerId: 'c1' }),
+      tx('SALE', 80000, 'FICHA', '2026-12-02T10:00:00', { customerId: 'c1' }), // dezembro: só ficha, nada recebido
+    ]
+    const nov = monthReport(f, 2026, 10, new Date(2026, 11, 20), 7000)
+    expect(nov.salesCents).toBe(150000)
+    expect(nov.receivedCents).toBe(70000)
+    expect(nov.estimatedProfitCents).toBe(49000) // 70% de 70000 (e não de 150000)
+    const ano = yearReport(f, 2026, new Date(2026, 11, 20), { '2026-11': 7000 })
+    expect(ano.profitCents).toBe(49000)
+    expect(ano.months[10].profitCents).toBe(49000)
+    expect(ano.monthsMissingMargin).toEqual([]) // dezembro não teve recebimento: não precisa de percentual
   })
 
   it('sugere o último percentual informado antes do mês', () => {

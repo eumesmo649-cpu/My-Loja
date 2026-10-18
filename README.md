@@ -60,7 +60,7 @@ Sem as duas, a sincronização fica desligada.
 
 Não existe lucro por peça, então o lucro é uma **estimativa por percentual**:
 
-- Em **Relatórios → Mensal** há o campo *Percentual de lucro estimado (%)*, salvo para aquele mês. Lucro estimado = total vendido × percentual.
+- Em **Relatórios → Mensal** há o campo *Percentual de lucro estimado (%)*, salvo para aquele mês. Lucro estimado = **faturamento × percentual**, onde faturamento é o **total recebido** do mês (vendas à vista em Pix, espécie, débito e crédito + prestações de ficha). Vendas na ficha só entram no lucro quando são recebidas.
 - **Lucro após despesas** = lucro estimado − despesas do mês. As compras de mercadoria **não** são descontadas de novo, porque o percentual já considera o custo das peças.
 - No **Relatório anual**, o lucro do ano é a **soma do lucro de cada mês**, cada um com o percentual do próprio mês. Meses com vendas e sem percentual ficam fora da soma e aparecem num aviso.
 - Percentuais ficam guardados em centésimos de ponto percentual (35% = 3500), sem números decimais imprecisos.

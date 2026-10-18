@@ -40,7 +40,7 @@ export interface MonthReport {
   salesDeltaPct: number | null
   /** percentual de lucro estimado informado para o mês (null = ainda não informado) */
   marginBp: number | null
-  /** vendas × percentual (null se não há percentual) */
+  /** faturamento (total recebido) × percentual (null se não há percentual) */
   estimatedProfitCents: number | null
   /** lucro estimado − despesas do mês (null se não há percentual) */
   profitAfterExpensesCents: number | null
@@ -83,7 +83,8 @@ export function monthReport(
       ? ((s.salesCents - previous.salesCents) / previous.salesCents) * 100
       : null
 
-  const profit = marginBp === null ? null : estimatedProfitCents(s.salesCents, marginBp)
+  // Lucro estimado = percentual × faturamento (total RECEBIDO: à vista + prestações), não o total vendido.
+  const profit = marginBp === null ? null : estimatedProfitCents(s.receivedCents, marginBp)
 
   return {
     year,
@@ -140,7 +141,7 @@ export interface YearReport {
   profitAfterExpensesCents: number
   /** Meses com percentual informado */
   monthsWithMargin: number
-  /** Meses que tiveram vendas, mas não têm percentual (não entram na soma do lucro) */
+  /** Meses que tiveram faturamento (recebido), mas não têm percentual (não entram na soma do lucro) */
   monthsMissingMargin: number[]
   /** Média mensal = vendas do ano / meses considerados (do 1º mês com venda até o mês atual, ou dezembro em anos passados). */
   averageMonthlySalesCents: number
@@ -161,7 +162,7 @@ export function yearReport(
     const s = summarize(filterByRange(txs, from, to))
     const bp = margins[marginKey(year, month0)]
     const marginBp = typeof bp === 'number' ? bp : null
-    const profit = marginBp === null ? null : estimatedProfitCents(s.salesCents, marginBp)
+    const profit = marginBp === null ? null : estimatedProfitCents(s.receivedCents, marginBp)
     return {
       month0,
       salesCents: s.salesCents,
@@ -210,7 +211,7 @@ export function yearReport(
     profitCents: sum((m) => m.profitCents),
     profitAfterExpensesCents: sum((m) => m.profitAfterExpensesCents),
     monthsWithMargin: months.filter((m) => m.marginBp !== null).length,
-    monthsMissingMargin: months.filter((m) => m.marginBp === null && m.salesCents > 0).map((m) => m.month0),
+    monthsMissingMargin: months.filter((m) => m.marginBp === null && m.receivedCents > 0).map((m) => m.month0),
     averageMonthlySalesCents: monthsConsidered > 0 ? Math.round(salesCents / monthsConsidered) : 0,
     monthsConsidered,
     best,

@@ -170,7 +170,7 @@ export async function generateMonthPdf(r: MonthReport): Promise<void> {
       doc,
       y,
       [
-        ['Percentual de lucro estimado (sobre o total vendido)', formatPercent(r.marginBp)],
+        ['Percentual de lucro estimado (sobre o total recebido)', formatPercent(r.marginBp)],
         ['Lucro estimado', formatBRL(r.estimatedProfitCents)],
         ['Despesas do mês', `${r.expensesCents > 0 ? '-' : ''}${formatBRL(r.expensesCents)}`],
         [
