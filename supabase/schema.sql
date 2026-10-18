@@ -150,3 +150,17 @@ where c.deleted_at is null
 group by c.id, c.user_id, c.name;
 
 grant select on public.customer_balances to authenticated;
+
+-- ---------- Função "ping" (usada pelo fluxo keepalive do GitHub) --------
+-- Só devolve a hora do servidor. Mantém o projeto gratuito ativo; não acessa dados.
+
+create or replace function public.ping()
+returns timestamptz
+language sql
+stable
+set search_path = ''
+as $$
+  select now();
+$$;
+
+grant execute on function public.ping() to anon, authenticated;

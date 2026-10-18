@@ -38,6 +38,16 @@ Sem as duas, a sincronização fica desligada.
 3. Em **Authentication → Providers**, deixe *Email* ativo. Para uso simples, desative "Confirm email" (ou confirme o e-mail após criar a conta).
 4. Preencha o `.env` e rode de novo. Em **Ajustes → Nuvem**, crie a conta / entre. O que já existe no aparelho sobe automaticamente.
 
+### Manter o projeto gratuito ativo (anti-pausa)
+
+Projetos grátis do Supabase são **pausados após cerca de 1 semana sem uso**. O fluxo `.github/workflows/keepalive.yml` faz uma consulta mínima ao banco toda segunda e quinta para evitar isso.
+
+1. No SQL Editor do Supabase, rode [`supabase/migrations/002_ping.sql`](supabase/migrations/002_ping.sql) (se você criou o banco com o `schema.sql` atual, a função já existe).
+2. No GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Crie `SUPABASE_URL` (a URL do projeto) e `SUPABASE_ANON_KEY` (chave anon/publishable, nunca a `service_role`).
+3. Em **Actions → Manter Supabase ativo → Run workflow**, rode uma vez para testar. Deve ficar verde.
+
+Observações: o GitHub desativa fluxos agendados em repositórios sem nenhuma atividade por 60 dias (basta um commit para reativar), e o agendamento pode atrasar alguns minutos. Se a loja passar a depender do app, o plano pago do Supabase (backups diários, sem pausa) é o caminho mais seguro.
+
 ### Como funciona a sincronização
 
 - Toda venda é gravada **primeiro no aparelho**; nunca se perde lançamento por falta de internet.
