@@ -10,6 +10,10 @@ import { CustomersPage } from '@/pages/CustomersPage'
 import { CustomerDetailPage } from '@/pages/CustomerDetailPage'
 import { ClosingPage } from '@/pages/ClosingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { TrashPage } from '@/pages/TrashPage'
+import { PrivacyPage } from '@/pages/PrivacyPage'
+import { LockScreen } from '@/components/LockScreen'
+import { useLock } from '@/store/LockContext'
 
 function Routes() {
   const route = useRoute()
@@ -26,6 +30,10 @@ function Routes() {
       return <ClosingPage />
     case 'settings':
       return <SettingsPage />
+    case 'trash':
+      return <TrashPage />
+    case 'privacy':
+      return <PrivacyPage />
     default:
       return <HomePage />
   }
@@ -33,6 +41,7 @@ function Routes() {
 
 export default function App() {
   const { status, loadError, retryLoad, startFresh } = useStore()
+  const { locked } = useLock()
 
   if (status === 'loading') {
     return (
@@ -64,8 +73,14 @@ export default function App() {
   }
 
   return (
-    <AppShell>
-      <Routes />
-    </AppShell>
+    <>
+      {/* "inert": enquanto bloqueado, nada do app recebe toque, foco nem leitor de tela */}
+      <div inert={locked} aria-hidden={locked || undefined}>
+        <AppShell>
+          <Routes />
+        </AppShell>
+      </div>
+      <LockScreen />
+    </>
   )
 }

@@ -19,7 +19,7 @@ export class StorageError extends Error {
 }
 
 export function defaultSettings(): Settings {
-  return { ownerName: '', lastMethod: 'PIX', closings: {}, profitMarginBp: {} }
+  return { ownerName: '', lastMethod: 'PIX', closings: {}, profitMarginBp: {}, storeName: '' }
 }
 
 export function emptyData(): AppData {
@@ -28,8 +28,10 @@ export function emptyData(): AppData {
     customers: [],
     transactions: [],
     settings: defaultSettings(),
-    pending: { customers: [], transactions: [] },
+    pending: { customers: [], transactions: [], settings: false },
+    purge: { customers: [], transactions: [] },
     lastPullAt: null,
+    ownerUserId: null,
   }
 }
 
@@ -59,8 +61,14 @@ export function normalizeData(raw: unknown): AppData {
     pending: {
       customers: Array.isArray(r.pending?.customers) ? r.pending!.customers : [],
       transactions: Array.isArray(r.pending?.transactions) ? r.pending!.transactions : [],
+      settings: r.pending?.settings === true,
+    },
+    purge: {
+      customers: Array.isArray(r.purge?.customers) ? r.purge!.customers : [],
+      transactions: Array.isArray(r.purge?.transactions) ? r.purge!.transactions : [],
     },
     lastPullAt: typeof r.lastPullAt === 'string' ? r.lastPullAt : null,
+    ownerUserId: typeof r.ownerUserId === 'string' ? r.ownerUserId : null,
   }
 }
 
@@ -145,5 +153,7 @@ export function parseBackup(json: string): AppData {
     transactions: data.transactions.map((t) => t.id),
   }
   data.lastPullAt = null
+  data.ownerUserId = null
+  data.purge = { customers: [], transactions: [] }
   return data
 }

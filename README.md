@@ -55,6 +55,18 @@ Observações: o GitHub desativa fluxos agendados em repositórios sem nenhuma a
 - Conflitos: vence o registro com `updated_at` mais recente. Exclusões são lógicas (`deleted_at`).
 - Dados de exemplo **nunca** são enviados à nuvem.
 
+## Segurança e privacidade
+
+- **Bloqueio do app**: PIN de 4 ou 6 números (guardado só como hash, apenas no aparelho) + biometria opcional. Bloqueia ao abrir e depois de 0/1/5/15 min fora do app. "Esqueci o PIN": com conta, confirma a senha; sem conta, apaga os dados do aparelho. É uma trava contra uso casual, **não é criptografia**.
+- **Lixeira** (`#/lixeira`): itens excluídos ficam 30 dias, podem ser restaurados ou apagados de vez. Cliente que ainda tem lançamentos não pode ser apagado de vez.
+- **Sair da conta** apaga os dados do aparelho (para não misturar contas); avisa se algo não foi enviado.
+- **Configurações na nuvem**: nome, logo, % de lucro e fechamentos sincronizam pela tabela `store_settings` (rode `supabase/migrations/003_settings_and_delete_account.sql`).
+- **Excluir minha conta** (Ajustes → Zona de perigo): função `delete_my_account()` apaga tudo na nuvem e no aparelho.
+- **Aviso de privacidade** em `#/privacidade`. Defina `VITE_PRIVACY_CONTACT` (e-mail) para exibir um contato. O texto é informativo, não é parecer jurídico.
+- **Cabeçalhos de segurança** (CSP etc.) em `vercel.json`. Se um dia usar outro serviço externo, inclua-o em `connect-src`.
+- Aviso de nova versão no app, lembrete semanal de cópia de segurança e versão visível em Ajustes.
+- Recomendado no Supabase: desligar cadastros abertos (Authentication → Sign In / Providers → "Allow new users to sign up") e exigir senha de 8+ caracteres.
+
 ## Regras financeiras (o coração do app)
 
 - Dinheiro é sempre **inteiro em centavos** (`R$ 35,90` = `3590`), formatado em pt-BR.
@@ -106,6 +118,8 @@ scripts/e2e.mjs         teste de fluxos no navegador (veja abaixo)
 Em **Ajustes → Dados de exemplo → Remover**: apaga só o que é fictício (IDs com prefixo próprio), sem tocar nos lançamentos reais. Para eliminar o recurso do código, apague `src/data/seed.ts` e o bloco "Dados de exemplo" em `src/pages/SettingsPage.tsx`.
 
 ## Teste de fluxos no navegador
+
+`node scripts/e2e-etapa1.mjs` (após `npm run build`) testa bloqueio, lixeira e privacidade servindo o app com os cabeçalhos do `vercel.json`.
 
 ```bash
 npm run build && npx vite preview --port 4173 &

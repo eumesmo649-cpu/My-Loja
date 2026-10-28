@@ -155,13 +155,17 @@ export async function pullChanges(client: SupabaseClient, since: string | null):
 
 /** Mescla registros da nuvem: vence o `updatedAt` mais recente; registros novos entram direto. */
 export function mergeRemote(data: AppData, remote: PullResult): AppData {
+  const purgedC = new Set(data.purge?.customers ?? [])
+  const purgedT = new Set(data.purge?.transactions ?? [])
   const customers = new Map(data.customers.map((c) => [c.id, c]))
   for (const r of remote.customers) {
+    if (purgedC.has(r.id)) continue // apagado de vez neste aparelho: não deixa voltar da nuvem
     const local = customers.get(r.id)
     if (!local || r.updatedAt > local.updatedAt) customers.set(r.id, r)
   }
   const transactions = new Map(data.transactions.map((t) => [t.id, t]))
   for (const r of remote.transactions) {
+    if (purgedT.has(r.id)) continue
     const local = transactions.get(r.id)
     if (!local || r.updatedAt > local.updatedAt) transactions.set(r.id, r)
   }
@@ -180,6 +184,7 @@ export function markAllPending(data: AppData): AppData {
     pending: {
       customers: data.customers.filter((c) => !isDemoId(c.id)).map((c) => c.id),
       transactions: data.transactions.filter((t) => !isDemoId(t.id)).map((t) => t.id),
+      settings: data.pending.settings,
     },
     lastPullAt: null,
   }
@@ -200,12 +205,144 @@ export function clearPushed(data: AppData, pushed: PushResult): AppData {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Lixeira: apagar de vez também na nuvem
+// ---------------------------------------------------------------------------
+
+export interface PurgeResult {
+  customers: string[]
+  transactions: string[]
+}
+
+/** Remove da nuvem o que foi apagado de vez. Lançamentos primeiro (chave estrangeira dos clientes). */
+export async function pushPurge(client: SupabaseClient, data: AppData): Promise<PurgeResult> {
+  const txIds = data.purge?.transactions ?? []
+  const custIds = data.purge?.customers ?? []
+  for (let i = 0; i < txIds.length; i += BATCH) {
+    const { error } = await client.from('transactions').delete().in('id', txIds.slice(i, i + BATCH))
+    if (error) throw new Error(error.message)
+  }
+  for (let i = 0; i < custIds.length; i += BATCH) {
+    const { error } = await client.from('customers').delete().in('id', custIds.slice(i, i + BATCH))
+    if (error) throw new Error(error.message)
+  }
+  return { customers: custIds, transactions: txIds }
+}
+
+export function clearPurged(data: AppData, done: PurgeResult): AppData {
+  const c = new Set(done.customers)
+  const t = new Set(done.transactions)
+  const purge = data.purge ?? { customers: [], transactions: [] }
+  return {
+    ...data,
+    purge: {
+      customers: purge.customers.filter((id) => !c.has(id)),
+      transactions: purge.transactions.filter((id) => !t.has(id)),
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Configurações da loja (uma linha por conta): nome, logo, percentuais de lucro, dias conferidos
+// ---------------------------------------------------------------------------
+
+interface SettingsRow {
+  user_id?: string
+  owner_name: string
+  store_name: string
+  logo: string | null
+  profit_margin_bp: Record<string, number>
+  closings: AppData['settings']['closings']
+  updated_at: string
+}
+
+const ts = (iso?: string | null) => (iso ? Date.parse(iso) : 0) || 0
+
+export function settingsHaveContent(s: AppData['settings']): boolean {
+  return Boolean(
+    s.ownerName || s.storeName || s.logoDataUrl || Object.keys(s.profitMarginBp).length || Object.keys(s.closings).length,
+  )
+}
+
+export type SettingsSyncResult =
+  | { kind: 'none' }
+  | { kind: 'applied'; remote: AppData['settings'] }
+  | { kind: 'pushed'; updatedAt: string }
+
+/**
+ * Configurações: vence a alteração mais recente (por data). Se a nuvem estiver mais nova, devolve o que
+ * deve ser aplicado aqui; se este aparelho tiver alteração pendente (ou a nuvem ainda não tiver nada), envia.
+ * Quem chama aplica o resultado com applySettingsResult (assim edições feitas durante o envio não se perdem).
+ */
+export async function syncSettings(client: SupabaseClient, data: AppData, userId: string): Promise<SettingsSyncResult> {
+  const { data: row, error } = await client.from('store_settings').select('*').maybeSingle()
+  if (error) throw new Error(error.message)
+  const remote = row as SettingsRow | null
+  const local = data.settings
+
+  if (remote && ts(remote.updated_at) > ts(local.updatedAt)) {
+    return {
+      kind: 'applied',
+      remote: {
+        ...local,
+        ownerName: remote.owner_name ?? '',
+        storeName: remote.store_name ?? '',
+        logoDataUrl: remote.logo ?? undefined,
+        profitMarginBp: remote.profit_margin_bp ?? {},
+        closings: remote.closings ?? {},
+        updatedAt: remote.updated_at,
+      },
+    }
+  }
+
+  const needsPush = data.pending.settings || (!remote && settingsHaveContent(local))
+  if (!needsPush) return { kind: 'none' }
+
+  const updatedAt = local.updatedAt ?? new Date().toISOString()
+  const { error: upErr } = await client.from('store_settings').upsert(
+    {
+      user_id: userId,
+      owner_name: local.ownerName,
+      store_name: local.storeName,
+      logo: local.logoDataUrl ?? null,
+      profit_margin_bp: local.profitMarginBp,
+      closings: local.closings,
+      updated_at: updatedAt,
+    },
+    { onConflict: 'user_id' },
+  )
+  if (upErr) throw new Error(upErr.message)
+  return { kind: 'pushed', updatedAt }
+}
+
+export function applySettingsResult(data: AppData, result: SettingsSyncResult): AppData {
+  if (result.kind === 'applied') {
+    // só aplica se, nesse meio tempo, não houve edição local mais nova
+    if (ts(result.remote.updatedAt) <= ts(data.settings.updatedAt)) return data
+    return {
+      ...data,
+      settings: { ...result.remote, lastMethod: data.settings.lastMethod },
+      pending: { ...data.pending, settings: false },
+    }
+  }
+  if (result.kind === 'pushed') {
+    // só limpa o "pendente" se nada mudou depois do envio
+    const unchanged = (data.settings.updatedAt ?? '') === result.updatedAt || !data.settings.updatedAt
+    return unchanged
+      ? { ...data, settings: { ...data.settings, updatedAt: result.updatedAt }, pending: { ...data.pending, settings: false } }
+      : data
+  }
+  return data
+}
+
 export function friendlySyncError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
   if (/failed to fetch|network|load failed/i.test(msg)) return 'Sem conexão com a internet. Seus dados estão salvos no aparelho.'
   if (/invalid login/i.test(msg)) return 'E-mail ou senha incorretos.'
   if (/already registered/i.test(msg)) return 'Este e-mail já tem cadastro. Use "Entrar".'
-  if (/password/i.test(msg) && /6/.test(msg)) return 'A senha precisa ter pelo menos 6 caracteres.'
+  if (/password/i.test(msg) && /\d/.test(msg) && /least|characters|should/i.test(msg)) return 'A senha é curta demais. Use uma senha maior (8 ou mais caracteres).'
+  if (/signups? not allowed|signup.*disabled|signups.*disabled/i.test(msg)) return 'Cadastros estão fechados. Peça para o responsável criar a sua conta.'
+  if (/rate limit|too many/i.test(msg)) return 'Muitas tentativas. Espere um pouco e tente de novo.'
   if (/email.*confirm|not confirmed/i.test(msg)) return 'Confirme seu e-mail (veja a caixa de entrada) e tente entrar de novo.'
   return msg
 }

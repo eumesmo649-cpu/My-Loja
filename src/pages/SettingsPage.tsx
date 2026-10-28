@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Cloud, Download, Smartphone, Sparkles, Trash2, Upload } from 'lucide-react'
+import { Cloud, Download, ShieldCheck, Smartphone, Sparkles, Trash2, Upload, UserX } from 'lucide-react'
 import { useStore } from '@/store/StoreContext'
 import { useUI } from '@/store/UIContext'
 import { usePwaInstall } from '@/hooks/usePwaInstall'
@@ -8,31 +8,22 @@ import { Button } from '@/components/ui/Button'
 import { Card, SectionTitle } from '@/components/ui/Card'
 import { TextField } from '@/components/ui/TextField'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { StoreProfileCard } from '@/components/settings/StoreProfileCard'
+import { LockCard } from '@/components/settings/LockCard'
+import { downloadBackup } from '@/lib/backup'
 
 export function SettingsPage() {
   const store = useStore()
   const { toast, confirm } = useUI()
   const pwa = usePwaInstall()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [name, setName] = useState(store.settings.ownerName)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState<string>()
 
-  const saveName = () => {
-    store.setOwnerName(name)
-    toast({ title: 'Nome salvo' })
-  }
-
   const download = () => {
-    const blob = new Blob([store.backupJson()], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `myloja-backup-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBackup(store.backupJson())
     toast({ title: 'Cópia de segurança salva' })
   }
 
@@ -74,6 +65,14 @@ export function SettingsPage() {
       setAuthError('Informe um e-mail válido e uma senha com pelo menos 6 caracteres.')
       return
     }
+    if (store.customers.length + store.transactions.length > 0) {
+      const ok = await confirm({
+        title: 'Enviar os dados deste aparelho?',
+        message: 'Os dados que já existem aqui serão enviados para esta conta e ficarão ligados a ela.',
+        confirmLabel: 'Continuar',
+      })
+      if (!ok) return
+    }
     setAuthBusy(true)
     try {
       if (mode === 'in') await store.signIn(email, password)
@@ -89,18 +88,49 @@ export function SettingsPage() {
     }
   }
 
+  const signOut = async () => {
+    const ok = await confirm({
+      title: 'Sair da conta?',
+      message: 'Os dados serão apagados DESTE aparelho (continuam salvos na nuvem) e o bloqueio por PIN é removido. Entre de novo para recuperá-los.',
+      confirmLabel: 'Sair',
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      await store.signOut()
+    } catch (e) {
+      if (!(e instanceof Error) || e.message !== 'UNSYNCED') return toast({ kind: 'error', title: 'Não foi possível sair' })
+      const force = await confirm({
+        title: 'Há alterações sem enviar',
+        message: 'Algumas alterações ainda não chegaram à nuvem (talvez sem internet). Se sair agora, elas serão perdidas. Baixe uma cópia antes, se quiser.',
+        confirmLabel: 'Sair e perder',
+        tone: 'danger',
+      })
+      if (force) await store.signOut({ force: true })
+    }
+  }
+
+  const deleteAccount = async () => {
+    const typed = window.prompt('Isto apaga sua conta e TODOS os dados na nuvem e neste aparelho, para sempre.\n\nPara confirmar, digite EXCLUIR:')
+    if (typed?.trim().toUpperCase() !== 'EXCLUIR') return
+    try {
+      await store.deleteAccount()
+      toast({ kind: 'info', title: 'Conta e dados excluídos' })
+    } catch (e) {
+      toast({ kind: 'error', title: e instanceof Error ? e.message : 'Não foi possível excluir a conta' })
+    }
+  }
+
   const { sync } = store
 
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="Ajustes" subtitle="Seu nome, instalação, cópia de segurança e nuvem" />
+      <PageHeader title="Ajustes" subtitle="Sua loja, bloqueio, cópia de segurança e nuvem" />
 
       <div className="flex flex-col gap-6">
-        <Card className="p-5">
-          <SectionTitle>Seu nome</SectionTitle>
-          <TextField label="Como devemos te chamar?" value={name} onChange={setName} placeholder="Ex.: Maria" maxLength={40} />
-          <Button className="mt-4" onClick={saveName}>Salvar</Button>
-        </Card>
+        <StoreProfileCard />
+
+        <LockCard />
 
         <Card className="p-5">
           <SectionTitle>Instalar no celular</SectionTitle>
@@ -134,7 +164,7 @@ export function SettingsPage() {
               {sync.error && <p role="alert" className="font-medium text-danger-600">{sync.error}</p>}
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" icon={<Cloud className="h-4 w-4" aria-hidden />} loading={sync.status === 'syncing'} onClick={() => void store.syncNow()}>Sincronizar agora</Button>
-                <Button variant="ghost" size="sm" onClick={() => void store.signOut()}>Sair</Button>
+                <Button variant="ghost" size="sm" onClick={() => void signOut()}>Sair</Button>
               </div>
             </div>
           ) : (
@@ -183,9 +213,23 @@ export function SettingsPage() {
           )}
         </Card>
 
+        <Card className="p-5">
+          <SectionTitle>Mais</SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            <a href="#/lixeira" className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-sand px-4 font-semibold"><Trash2 className="h-5 w-5" aria-hidden /> Lixeira</a>
+            <a href="#/privacidade" className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-sand px-4 font-semibold"><ShieldCheck className="h-5 w-5" aria-hidden /> Aviso de privacidade</a>
+          </div>
+          <p className="mt-4 text-xs text-faint">MyLoja versão {__APP_VERSION__}</p>
+        </Card>
+
         <Card className="border-danger-100 p-5">
           <SectionTitle>Zona de perigo</SectionTitle>
-          <Button variant="danger" icon={<Trash2 className="h-5 w-5" aria-hidden />} onClick={() => void erase()}>Apagar tudo deste aparelho</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="danger" icon={<Trash2 className="h-5 w-5" aria-hidden />} onClick={() => void erase()}>Apagar tudo deste aparelho</Button>
+            {sync.email && (
+              <Button variant="danger" icon={<UserX className="h-5 w-5" aria-hidden />} onClick={() => void deleteAccount()}>Excluir minha conta e meus dados</Button>
+            )}
+          </div>
         </Card>
       </div>
     </div>

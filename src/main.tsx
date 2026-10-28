@@ -4,13 +4,16 @@ import './index.css'
 import App from './App'
 import { StoreProvider } from './store/StoreContext'
 import { UIProvider } from './store/UIContext'
+import { LockProvider } from './store/LockContext'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <StoreProvider>
-      <UIProvider>
-        <App />
-      </UIProvider>
+      <LockProvider>
+        <UIProvider>
+          <App />
+        </UIProvider>
+      </LockProvider>
     </StoreProvider>
   </StrictMode>,
 )

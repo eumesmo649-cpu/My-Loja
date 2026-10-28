@@ -46,9 +46,23 @@ export interface Settings {
   closings: Record<string, ClosingRecord>
   /** Percentual de lucro estimado por mês ('2026-10' -> 3500 = 35,00%), em centésimos de ponto percentual. */
   profitMarginBp: Record<string, number>
+  /** Nome da loja (aparece na tela de bloqueio e no menu). */
+  storeName: string
+  /** Logo da loja, já reduzida, como data URL (image/*). */
+  logoDataUrl?: string
+  /** Quando as configurações sincronizáveis (nome, logo, percentuais, dias conferidos) mudaram pela última vez. */
+  updatedAt?: string
 }
 
 export interface PendingSync {
+  customers: string[]
+  transactions: string[]
+  /** Configurações alteradas e ainda não enviadas. */
+  settings?: boolean
+}
+
+/** Itens apagados de vez (lixeira) que ainda precisam ser removidos da nuvem. */
+export interface PendingPurge {
   customers: string[]
   transactions: string[]
 }
@@ -59,7 +73,10 @@ export interface AppData {
   transactions: Transaction[]
   settings: Settings
   pending: PendingSync
+  purge?: PendingPurge
   lastPullAt: string | null
+  /** Conta (id do usuário no Supabase) dona dos dados deste aparelho. Evita misturar contas. */
+  ownerUserId?: string | null
 }
 
 export type TransactionInput = {

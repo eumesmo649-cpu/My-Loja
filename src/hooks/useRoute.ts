@@ -10,6 +10,8 @@ export type Route =
   | { name: 'customer'; id: string }
   | { name: 'closing' }
   | { name: 'settings' }
+  | { name: 'trash' }
+  | { name: 'privacy' }
 
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#/, '').split('?')[0].replace(/\/+$/, '') || '/'
@@ -19,6 +21,8 @@ export function parseHash(hash: string): Route {
   if (path.startsWith('/clientes/')) return { name: 'customer', id: decodeURIComponent(path.slice('/clientes/'.length)) }
   if (path === '/fechamento') return { name: 'closing' }
   if (path === '/ajustes') return { name: 'settings' }
+  if (path === '/lixeira') return { name: 'trash' }
+  if (path === '/privacidade') return { name: 'privacy' }
   return { name: 'home' }
 }
 
@@ -45,6 +49,8 @@ export const paths = {
   customer: (id: string) => `#/clientes/${encodeURIComponent(id)}`,
   closing: '#/fechamento',
   settings: '#/ajustes',
+  trash: '#/lixeira',
+  privacy: '#/privacidade',
 }
 
 /** Rota "principal" para destacar a aba certa (cliente aberto conta como Clientes). */
