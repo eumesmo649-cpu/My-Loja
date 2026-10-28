@@ -32,7 +32,7 @@ export function Sidebar({ active, route }: { active: TabId | null; route: Route 
       <button
         type="button"
         onClick={() => openSheet({ kind: 'menu' })}
-        className="mt-7 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 text-base font-bold text-white shadow-float transition-colors hover:bg-brand-700"
+        className="mt-7 flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-brand-solid px-4 text-base font-bold text-white shadow-float transition-colors hover:bg-brand-solid-hover"
       >
         <Plus className="h-5 w-5" strokeWidth={2.6} aria-hidden />
         Registrar

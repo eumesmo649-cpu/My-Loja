@@ -30,7 +30,7 @@ export function StatusBanners() {
   return (
     <>
       {updateSW && (
-        <div role="status" className="flex items-center justify-between gap-3 bg-brand-50 px-4 py-2.5 text-[14px] font-medium text-brand-800">
+        <div role="status" className="flex items-center justify-between gap-3 bg-brand-50 px-4 py-2.5 text-[14px] font-medium text-brand-700">
           <span className="flex items-center gap-2.5"><RefreshCw className="h-4 w-4 shrink-0" aria-hidden /> Há uma versão nova do app.</span>
           <button type="button" className="min-h-9 rounded-lg px-3 font-bold underline" onClick={() => void updateSW(true)}>Atualizar</button>
         </div>

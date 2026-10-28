@@ -12,7 +12,7 @@ export function StoreMark({ logo, name, size = 'md' }: { logo?: string; name: st
     return <img src={logo} alt="" className={cn('shrink-0 bg-card object-cover ring-1 ring-line', SIZES[size])} />
   }
   return (
-    <span className={cn('grid shrink-0 place-items-center bg-brand-600 font-extrabold text-paper', SIZES[size])} aria-hidden>
+    <span className={cn('grid shrink-0 place-items-center bg-brand-solid font-extrabold text-white', SIZES[size])} aria-hidden>
       {name.trim().slice(0, 1).toUpperCase() || 'M'}
     </span>
   )

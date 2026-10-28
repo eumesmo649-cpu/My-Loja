@@ -1,0 +1,39 @@
+name: Manter Supabase ativo
+
+# Projetos gratuitos do Supabase são pausados após ~1 semana sem uso.
+# Este fluxo faz uma consulta mínima ao banco (função public.ping) toda segunda e quinta,
+# o que mantém o projeto ativo. Também pode ser disparado à mão em Actions > Run workflow.
+#
+# Precisa de dois "secrets" do repositório (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL        -> https://xxxx.supabase.co
+#   SUPABASE_ANON_KEY   -> chave anon/publishable (nunca a service_role)
+
+on:
+  schedule:
+    - cron: '17 9 * * 1,4' # segunda e quinta, 09:17 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar o banco
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Faltam os secrets SUPABASE_URL e/ou SUPABASE_ANON_KEY (veja o README)."
+            exit 1
+          fi
+          curl -sS --fail-with-body --retry 3 --retry-delay 15 --max-time 30 \
+            -X POST "${SUPABASE_URL%/}/rest/v1/rpc/ping" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+          echo
+          echo "Supabase respondeu: projeto ativo."

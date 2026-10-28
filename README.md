@@ -64,6 +64,7 @@ Observações: o GitHub desativa fluxos agendados em repositórios sem nenhuma a
 - **Excluir minha conta** (Ajustes → Zona de perigo): função `delete_my_account()` apaga tudo na nuvem e no aparelho.
 - **Aviso de privacidade** em `#/privacidade`. Defina `VITE_PRIVACY_CONTACT` (e-mail) para exibir um contato. O texto é informativo, não é parecer jurídico.
 - **Cabeçalhos de segurança** (CSP etc.) em `vercel.json`. Se um dia usar outro serviço externo, inclua-o em `connect-src`.
+- **Modo escuro** (Ajustes → Aparência): Automático (segue o celular), Claro ou Escuro, só neste aparelho. As cores são variáveis em `src/index.css`; `public/theme-init.js` aplica o tema antes da 1ª pintura.
 - Aviso de nova versão no app, lembrete semanal de cópia de segurança e versão visível em Ajustes.
 - Recomendado no Supabase: desligar cadastros abertos (Authentication → Sign In / Providers → "Allow new users to sign up") e exigir senha de 8+ caracteres.
 

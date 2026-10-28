@@ -129,7 +129,7 @@ export function LockScreen() {
               {Array.from({ length: len }, (_, i) => (
                 <span
                   key={i}
-                  className={cn('h-3.5 w-3.5 rounded-full border-2 transition-colors', i < digits.length ? 'border-brand-600 bg-brand-600' : 'border-faint')}
+                  className={cn('h-3.5 w-3.5 rounded-full border-2 transition-colors', i < digits.length ? 'border-brand-solid bg-brand-solid' : 'border-faint')}
                 />
               ))}
             </div>

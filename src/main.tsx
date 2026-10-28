@@ -4,7 +4,10 @@ import './index.css'
 import App from './App'
 import { StoreProvider } from './store/StoreContext'
 import { UIProvider } from './store/UIContext'
+import { watchSystemTheme } from './lib/theme'
 import { LockProvider } from './store/LockContext'
+
+watchSystemTheme()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

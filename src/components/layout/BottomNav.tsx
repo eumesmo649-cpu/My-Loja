@@ -38,7 +38,7 @@ export function BottomNav({ active }: { active: TabId | null }) {
             type="button"
             onClick={() => openSheet({ kind: 'menu' })}
             aria-label="Registrar movimentação"
-            className="-mt-7 grid h-16 w-16 place-items-center rounded-full bg-brand-600 text-white shadow-float ring-4 ring-paper transition-transform hover:bg-brand-700 active:scale-95"
+            className="-mt-7 grid h-16 w-16 place-items-center rounded-full bg-brand-solid text-white shadow-float ring-4 ring-paper transition-transform hover:bg-brand-solid-hover active:scale-95"
           >
             <Plus className="h-8 w-8" strokeWidth={2.6} aria-hidden />
           </button>

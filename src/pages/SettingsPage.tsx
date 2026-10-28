@@ -11,6 +11,8 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { StoreProfileCard } from '@/components/settings/StoreProfileCard'
 import { LockCard } from '@/components/settings/LockCard'
 import { downloadBackup } from '@/lib/backup'
+import { getThemePref, setThemePref, type ThemePref } from '@/lib/theme'
+import { Segmented } from '@/components/ui/Segmented'
 
 export function SettingsPage() {
   const store = useStore()
@@ -121,6 +123,8 @@ export function SettingsPage() {
     }
   }
 
+  const [theme, setTheme] = useState<ThemePref>(getThemePref())
+
   const { sync } = store
 
   return (
@@ -131,6 +135,18 @@ export function SettingsPage() {
         <StoreProfileCard />
 
         <LockCard />
+
+        <Card className="p-5">
+          <SectionTitle>Aparência</SectionTitle>
+          <Segmented
+            ariaLabel="Tema"
+            variant="tabs"
+            options={[{ value: 'system', label: 'Automático' }, { value: 'light', label: 'Claro' }, { value: 'dark', label: 'Escuro' }]}
+            value={theme}
+            onChange={(v) => { setTheme(v); setThemePref(v) }}
+          />
+          <p className="mt-3 text-sm text-muted">Automático segue o modo do seu celular. Vale só neste aparelho.</p>
+        </Card>
 
         <Card className="p-5">
           <SectionTitle>Instalar no celular</SectionTitle>

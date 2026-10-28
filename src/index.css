@@ -37,6 +37,12 @@
   --color-danger-600: #b23a26;
   --color-danger-700: #922d1c;
 
+  /* fundos sólidos (botões com texto branco): no escuro não acompanham os tons de texto */
+  --color-brand-solid: #9f3a5c;
+  --color-brand-solid-hover: #842f4b;
+  --color-danger-solid: #b23a26;
+  --color-danger-solid-hover: #922d1c;
+
   --radius-card: 1.25rem;
 
   --shadow-card: 0 1px 2px rgb(42 36 33 / 0.04), 0 1px 1px rgb(42 36 33 / 0.03);
@@ -76,6 +82,51 @@
     from { opacity: 0; transform: translateY(-12px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
+}
+
+/* ---------- Modo escuro ----------
+   O atributo data-theme ("light" | "dark") é definido por /theme-init.js antes da 1ª pintura
+   e por src/lib/theme.ts. As utilidades do Tailwind leem estas variáveis, então basta redefini-las. */
+:root { color-scheme: light; }
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-paper: #171311;
+  --color-card: #221c19;
+  --color-line: #3a322d;
+  --color-sand: #2c2521;
+  --color-ink: #f1ebe4;
+  --color-muted: #b3a89e;
+  --color-faint: #857a70;
+
+  --color-brand-50: #3a1c27;
+  --color-brand-100: #4a2433;
+  --color-brand-200: #5e2e41;
+  --color-brand-500: #d9708f;
+  --color-brand-600: #e57f9f;
+  --color-brand-700: #ef98b2;
+
+  --color-sage-50: #1b2e24;
+  --color-sage-100: #25402f;
+  --color-sage-600: #5cc08e;
+  --color-sage-700: #80d4a8;
+
+  --color-clay-50: #35260f;
+  --color-clay-100: #4a3515;
+  --color-clay-600: #e5a05a;
+  --color-clay-700: #efb87a;
+
+  --color-danger-50: #3a1f1a;
+  --color-danger-100: #4d2a23;
+  --color-danger-600: #f0806c;
+  --color-danger-700: #f59a8a;
+
+  --color-brand-solid: #b8476d;
+  --color-brand-solid-hover: #c9557b;
+  --color-danger-solid: #c4452f;
+  --color-danger-solid-hover: #d2533d;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-sheet: 0 -8px 40px -8px rgb(0 0 0 / 0.6);
 }
 
 @layer base {

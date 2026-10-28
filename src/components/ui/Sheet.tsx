@@ -84,7 +84,7 @@ export function Sheet({ title, onClose, children, layer = 'sheet', hideClose, si
         isDialog ? 'z-[60] items-center p-5' : 'z-50 items-end md:items-center md:p-6',
       )}
     >
-      <div className="absolute inset-0 animate-fade-in bg-ink/45" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 animate-fade-in bg-black/50" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
         role="dialog"
